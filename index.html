@@ -1,0 +1,1372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crew Scheduler</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root{
+  --bg:#f6f7f9;--card:#fff;--ink:#16191d;--muted:#5f6b78;--line:#e2e6eb;
+  --accent:#1f6feb;--accent-ink:#fff;--warn:#b45309;--warn-bg:#fff7e6;--bad:#c62828;--bad-bg:#fdecec;--ok:#15803d;--ok-bg:#e9f7ee;
+  --chip:#eef1f5;--radius:12px;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#0f1216;--card:#181c22;--ink:#e8ebef;--muted:#9aa5b1;--line:#2a3038;--accent:#4c8dff;--chip:#232932;
+  --warn:#f5b454;--warn-bg:#2d2414;--bad:#ff7b7b;--bad-bg:#2e1717;--ok:#5fd08a;--ok-bg:#132619;}
+}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+header{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line)}
+.top{display:flex;align-items:center;justify-content:space-between;padding:10px 14px 4px;max-width:980px;margin:0 auto}
+h1{font-size:18px;margin:0}
+#saveState{font-size:12px;color:var(--muted)}
+nav{display:flex;gap:2px;padding:0 8px;max-width:980px;margin:0 auto;overflow-x:auto}
+nav button{flex:1;min-width:max-content;background:none;border:0;border-bottom:3px solid transparent;padding:10px 12px;font:inherit;color:var(--muted);cursor:pointer}
+nav button.on{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+main{max-width:980px;margin:0 auto;padding:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:14px}
+.card h2{font-size:16px;margin:0 0 4px}
+.card h3{font-size:14px;margin:12px 0 6px}
+.step{display:inline-flex;width:22px;height:22px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-size:12px;align-items:center;justify-content:center;margin-right:6px;vertical-align:1px}
+.muted{color:var(--muted)}.small{font-size:13px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.grow{flex:1;min-width:140px}
+label.row.small{flex-wrap:nowrap;align-items:flex-start;gap:8px}
+label.row.small input[type=checkbox]{margin-top:2px;flex:none;width:18px;height:18px}
+button.b,label.b{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px 12px;border-radius:9px;font:inherit;cursor:pointer}
+button.p{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+button.x{border:0;background:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;padding:4px 6px}
+button.b:disabled{opacity:.5;cursor:default}
+input[type=text],input[type=number],input[type=tel],select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%}
+input[type=number]{width:72px}
+textarea{min-height:70px;resize:vertical}
+label.f{display:block;font-size:13px;color:var(--muted);margin:8px 0 3px}
+.list{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.item{display:flex;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.item .main{flex:1;min-width:0}
+.item .t{font-weight:600;overflow-wrap:anywhere}
+.item .s{font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.chip{border:1px solid var(--line);background:var(--chip);border-radius:999px;padding:6px 11px;font:inherit;font-size:14px;cursor:pointer;color:var(--ink)}
+.chip.off{background:transparent;color:var(--muted);text-decoration:line-through}
+.tag{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px;background:var(--chip);color:var(--muted);margin-left:4px;vertical-align:1px}
+.tag.lead{background:var(--ok-bg);color:var(--ok)}
+.tag.lock{background:var(--chip);color:var(--accent)}
+.warn{background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:6px 9px;font-size:13px;margin-top:6px}
+.bad{background:var(--bad-bg);color:var(--bad);border-radius:8px;padding:6px 9px;font-size:13px;margin-top:6px}
+.good{background:var(--ok-bg);color:var(--ok);border-radius:8px;padding:6px 9px;font-size:13px;margin-top:6px}
+.jobs{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+.job{border:1px solid var(--line);border-left:5px solid var(--c,#888);border-radius:10px;padding:10px;background:var(--bg)}
+.job .hd{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.job .nm{font-weight:700;overflow-wrap:anywhere}
+.mem{display:flex;align-items:center;gap:6px;padding:5px 0;border-top:1px dashed var(--line)}
+.mem:first-of-type{border-top:0}
+.mem .n{flex:1}
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}
+.stat{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+.stat b{font-size:18px;display:block}
+.stat span{font-size:12px;color:var(--muted)}
+svg.map{width:100%;height:auto;background:var(--bg);border:1px solid var(--line);border-radius:10px}
+details summary{cursor:pointer;font-weight:600}
+.modalbg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:20;padding:16px}
+.modal{background:var(--card);border-radius:14px;padding:18px;max-width:420px;width:100%;border:1px solid var(--line)}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:9px;font-size:14px;z-index:30;max-width:90vw}
+.hide{display:none!important}
+ol.help li{margin-bottom:8px}
+code{background:var(--chip);padding:1px 5px;border-radius:5px;font-size:13px;overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<header>
+  <div class="top"><h1>Crew Scheduler</h1><span id="saveState">Loading…</span></div>
+  <nav id="tabs">
+    <button data-tab="tonight" class="on">Today</button>
+    <button data-tab="workers">Workers</button>
+    <button data-tab="rules">Crew rules</button>
+    <button data-tab="help">How to</button>
+  </nav>
+</header>
+<main id="app"></main>
+<input type="file" id="fileJobs" accept=".kml,.kmz,.csv,.ics,.txt,application/vnd.google-earth.kml+xml" class="hide">
+<input type="file" id="fileWorkers" accept=".kml,.kmz,.csv,.txt" class="hide">
+
+<script>
+"use strict";
+/* ---------- state ---------- */
+const APP_VERSION="2026.11.07-g";
+/* Small rolling log of errors and key actions, kept on this device for support packs. */
+const LOG=(()=>{try{return JSON.parse(localStorage.getItem("crew_log"))||[]}catch(e){return []}})();
+function logEvent(type,msg,extra){
+  try{LOG.push({t:new Date().toISOString(),type,msg:String(msg).slice(0,500),...(extra?{extra}:{})});while(LOG.length>300)LOG.shift();localStorage.setItem("crew_log",JSON.stringify(LOG))}catch(e){}
+}
+window.addEventListener("error",e=>logEvent("error",e.message,{src:(e.filename||"").split("/").pop(),line:e.lineno,col:e.colno,stack:e.error&&e.error.stack?String(e.error.stack).slice(0,800):""}));
+window.addEventListener("unhandledrejection",e=>logEvent("error","Unhandled: "+(e.reason&&e.reason.message||e.reason),{stack:e.reason&&e.reason.stack?String(e.reason.stack).slice(0,800):""}));
+logEvent("open","App opened",{version:APP_VERSION});
+const DEFAULT_SETTINGS={defaultCrew:2,maxMiles:0,maxLeadMiles:0,roadFactor:1.25,leadsAsHelpers:true,pickupMiles:2,allowStores:false};
+/* A lead's own limit (set on the lead) wins over the default. 0 = no limit. */
+const leadLimit=w=>{const own=+(w&&w.maxMiles)||0;return own>0?own:(+S().maxLeadMiles||0)};
+let roster={workers:[],conflicts:[],prefers:[],settings:{...DEFAULT_SETTINGS}};
+let tonight={jobs:[],assign:null,locks:{},off:[],importedAt:null,source:""};
+let tab="tonight";
+let editingWorker=null; // id or "new"
+let editingJob=null;
+const PALETTE=["#1f77b4","#d62728","#2ca02c","#9467bd","#ff7f0e","#17becf","#8c564b","#e377c2","#7f7f7f","#bcbd22","#3366cc","#dc3912","#109618","#990099","#0099c6","#dd4477"];
+
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const uid=()=>Math.random().toString(36).slice(2,10);
+const S=()=>roster.settings;
+
+/* ---------- persistence ---------- */
+let db=null, dbOK=false;
+const saveTimers={}, lastWritten={}, writing={};
+function lsGet(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+function setSave(t){$("#saveState").textContent=t}
+function normalize(){
+  roster.workers=roster.workers||[];roster.conflicts=roster.conflicts||[];roster.prefers=roster.prefers||[];
+  if(roster.settings&&roster.settings.maxLeadMiles===undefined)roster.settings.maxLeadMiles=roster.settings.maxMiles||0;
+  roster.settings={...DEFAULT_SETTINGS,...(roster.settings||{})};
+  delete roster.settings.requireLead;
+  tonight.jobs=tonight.jobs||[];tonight.jobs.forEach(j=>{if(!j.trucks)j.trucks=1});tonight.locks=tonight.locks||{};tonight.off=tonight.off||[];
+}
+function save(which){
+  const obj=which==="roster"?roster:tonight;
+  lsSet("crew_"+which,obj);
+  if(!dbOK){setSave("Saved on this device");return}
+  clearTimeout(saveTimers[which]);
+  setSave("Saving…");
+  saveTimers[which]=setTimeout(()=>flush(which),700);
+}
+async function flush(which){
+  if(writing[which]){saveTimers[which]=setTimeout(()=>flush(which),400);return}
+  saveTimers[which]=null;
+  const obj=which==="roster"?roster:tonight;
+  const json=JSON.stringify(obj);
+  if(json===lastWritten[which]){setSave("All changes saved");return}
+  writing[which]=true;
+  try{
+    await db.doc("app/"+which).set(JSON.parse(json));
+    lastWritten[which]=json;setSave("All changes saved");
+  }catch(e){
+    if(e&&e.code==="unavailable"){writing[which]=false;setTimeout(()=>flush(which),1500+Math.random()*1000);return}
+    if(e&&e.code==="quota_exceeded")setSave("Storage full — remove old data");
+    else setSave("Can't save to account (saved on this device)");
+  }
+  writing[which]=false;
+}
+async function initDB(){
+  const lr=lsGet("crew_roster"),lt=lsGet("crew_tonight");
+  if(lr)roster=lr; if(lt)tonight=lt; normalize(); render();
+  setSave("Saved on this device");
+  if(!window.claude||!window.claude.use)return;
+  try{db=await window.claude.use("db")}catch(e){db=null}
+  if(!db)return;
+  let settled=false;
+  const timer=setTimeout(()=>{if(!settled)setSave("Account storage not reachable — saving on this device")},10000);
+  for(const which of ["roster","tonight"]){
+    db.doc("app/"+which).onSnapshot(snap=>{
+      if(snap.metadata&&snap.metadata.hasPendingWrites)return;
+      settled=true;clearTimeout(timer);dbOK=true;
+      if(!snap.exists){
+        const obj=which==="roster"?roster:tonight;
+        const hasLocal=which==="roster"?obj.workers.length:obj.jobs.length;
+        if(hasLocal)save(which); else setSave("All changes saved");
+        return;
+      }
+      const data=snap.data();const json=JSON.stringify(data);
+      if(json===lastWritten[which])return;
+      if(saveTimers[which]||writing[which])return; // local edit in flight wins
+      lastWritten[which]=json;
+      if(which==="roster")roster=JSON.parse(json);else tonight=JSON.parse(json);
+      normalize();lsSet("crew_"+which,which==="roster"?roster:tonight);
+      if(!document.activeElement||!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))render();
+      if(!snap.metadata||!snap.metadata.fromCache)setSave("All changes saved");
+    },err=>{settled=true;clearTimeout(timer);dbOK=false;setSave("Saved on this device")});
+  }
+}
+
+/* ---------- geo helpers ---------- */
+function parseCoords(txt){
+  if(!txt)return null;txt=String(txt).trim();
+  let m=txt.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
+  if(!m)m=txt.match(/[?&](?:q|ll|query|destination|center)=(-?\d+(?:\.\d+)?)(?:,|%2C)\s*(-?\d+(?:\.\d+)?)/i);
+  if(!m)m=txt.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+  if(!m)m=txt.match(/(-?\d{1,2}\.\d+)\s*[, ]\s*(-?\d{1,3}\.\d+)/);
+  if(!m)return null;
+  const lat=+m[1],lng=+m[2];
+  if(!isFinite(lat)||!isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180)return null;
+  return {lat,lng};
+}
+function hav(a,b){
+  const R=3958.8,r=Math.PI/180;
+  const dLat=(b.lat-a.lat)*r,dLng=(b.lng-a.lng)*r;
+  const x=Math.sin(dLat/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(x));
+}
+const hasLoc=o=>o&&typeof o.lat==="number"&&typeof o.lng==="number";
+const miles=(w,j)=>hav(w,j)*S().roadFactor;
+const fmtMi=m=>m<10?m.toFixed(1):Math.round(m)+"";
+
+/* ---------- import parsers ---------- */
+function stripHtml(s){const d=document.createElement("div");d.innerHTML=String(s||"").replace(/<br\s*\/?>/gi,"\n");return (d.textContent||"").trim()}
+function parseKML(text){
+  const doc=new DOMParser().parseFromString(text,"text/xml");
+  if(doc.getElementsByTagName("parsererror").length)throw new Error("That file isn't valid KML.");
+  const out=[];
+  const pms=doc.getElementsByTagNameNS("*","Placemark");
+  for(const pm of pms){
+    const g=t=>{const e=pm.getElementsByTagNameNS("*",t)[0];return e?e.textContent.trim():""};
+    const name=g("name")||"Unnamed";
+    const coordsTxt=(pm.getElementsByTagNameNS("*","coordinates")[0]||{}).textContent||"";
+    const pts=coordsTxt.trim().split(/\s+/).map(s=>s.split(",").map(Number)).filter(a=>a.length>=2&&isFinite(a[0])&&isFinite(a[1]));
+    let lat=null,lng=null;
+    if(pts.length){lng=pts.reduce((s,p)=>s+p[0],0)/pts.length;lat=pts.reduce((s,p)=>s+p[1],0)/pts.length}
+    const extra={};
+    for(const d of pm.getElementsByTagNameNS("*","Data")){
+      const k=d.getAttribute("name");const v=(d.getElementsByTagNameNS("*","value")[0]||{}).textContent;
+      if(k&&v!=null&&String(v).trim())extra[k]=String(v).trim();
+    }
+    let folder="";let p=pm.parentNode;
+    while(p&&p.nodeType===1){if(p.localName==="Folder"){const n=[...p.children].find(c=>c.localName==="name");folder=n?n.textContent.trim():"";break}p=p.parentNode}
+    const desc=stripHtml(g("description"));
+    const address=g("address")||extra.address||extra.Address||extra.Location||"";
+    let crew=null;
+    for(const [k,v] of Object.entries(extra)){if(/crew|workers|people|headcount|staff/i.test(k)&&/^\d+$/.test(v)){crew=+v}}
+    out.push({name,lat,lng,address,desc:desc.slice(0,400),extra,folder,crew});
+  }
+  return out;
+}
+async function readKMZ(file){
+  if(!window.JSZip)throw new Error("Couldn't open KMZ here. In My Maps, tick “Export to a .KML file” and try again.");
+  const zip=await JSZip.loadAsync(file);
+  const f=Object.values(zip.files).find(f=>/\.kml$/i.test(f.name));
+  if(!f)throw new Error("No KML inside that KMZ.");
+  return f.async("string");
+}
+function parseCSV(text){
+  const rows=[];let row=[],cur="",q=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(q){if(c==='"'){if(text[i+1]==='"'){cur+='"';i++}else q=false}else cur+=c}
+    else if(c==='"')q=true;
+    else if(c===","||c==="\t"){row.push(cur);cur=""}
+    else if(c==="\n"||c==="\r"){if(c==="\r"&&text[i+1]==="\n")i++;row.push(cur);rows.push(row);row=[];cur=""}
+    else cur+=c;
+  }
+  if(cur||row.length){row.push(cur);rows.push(row)}
+  return rows.filter(r=>r.some(c=>c.trim()));
+}
+function rowsToPlaces(rows){
+  if(!rows.length)return [];
+  const h=rows[0].map(c=>c.trim().toLowerCase());
+  const find=re=>h.findIndex(c=>re.test(c));
+  let iN=find(/^(name|title|job|worker|employee|site)/),iLat=find(/^lat/),iLng=find(/^(lng|lon|long)/),iA=find(/address|location|street/),iC=find(/crew|workers|people|size|headcount/),iP=find(/phone|cell|mobile/),iL=find(/lead/),iAc=find(/^active/),iMx=find(/^max/),iCo=find(/coord|gps|link|url|map/);
+  let body=rows.slice(1);
+  if(iN<0&&iLat<0&&iA<0){body=rows;iN=0;}
+  return body.map(r=>{
+    const get=i=>i>=0&&r[i]!=null?r[i].trim():"";
+    let c=null;
+    if(iLat>=0&&iLng>=0){const la=parseFloat(get(iLat)),ln=parseFloat(get(iLng));if(isFinite(la)&&isFinite(ln))c={lat:la,lng:ln}}
+    if(!c&&iCo>=0)c=parseCoords(get(iCo));
+    if(!c)c=parseCoords(r.slice(1).join(","));
+    return {name:get(iN)||"Unnamed",address:get(iA),lat:c?c.lat:null,lng:c?c.lng:null,crew:/^\d+$/.test(get(iC))?+get(iC):null,phone:get(iP),lead:/^(y|yes|true|1|x)$/i.test(get(iL)),active:iAc>=0?!/^(n|no|false|0)$/i.test(get(iAc)):true,maxMiles:iMx>=0?Math.max(0,parseFloat(get(iMx))||0):0};
+  });
+}
+/* Job titles look like: "7a-Duke Energy/Jake Muehlbach-Pittsboro, NC, Chatham County"
+   or "630a-Lee Electric/Austin Woody-Aberdeen, NC". Headings like "***Fayetteville Schedule***" are skipped. */
+function parseJobTitle(s){
+  s=String(s||"").trim();
+  if(!s||/^\*+.*\*+$/.test(s)||/^[-=*#\s]+$/.test(s))return {header:true};
+  const m=s.match(/^(\d{1,4}(?::\d{2})?\s*[ap]m?)\s*[-–]\s*(.+)$/i);
+  let time="",rest=s;
+  if(m){time=fmtTime(m[1]);rest=m[2]}
+  const slash=rest.indexOf("/");
+  let client=rest,contact="",place="";
+  if(slash>=0){
+    client=rest.slice(0,slash).trim();
+    const after=rest.slice(slash+1);
+    const dash=after.search(/\s*[-–]\s*/);
+    if(dash>=0){contact=after.slice(0,dash).trim();place=after.slice(dash).replace(/^\s*[-–]\s*/,"").trim()}
+    else contact=after.trim();
+  } else {
+    const dash=rest.search(/\s[-–]\s|[-–](?=\s*[A-Z][a-z]+,\s*[A-Z]{2}\b)/);
+    if(dash>=0){client=rest.slice(0,dash).trim();place=rest.slice(dash).replace(/^\s*[-–]\s*/,"").trim()}
+  }
+  const crewNo=(contact.match(/(?:crew\s*)?#\s*(\d+)/i)||[])[1]||"";
+  const cnt=countsFrom(s);
+  place=stripCounts(place);
+  return {time,client,contact,place,crewNo,trucks:cnt.trucks,per:cnt.per,name:contact?`${client} / ${contact}`:client};
+}
+/* Pull "2 trucks" / "3 man crew" style counts out of calendar text */
+const TRUCK_RE=/\(?\b(\d{1,2})\s*(?:x\s*)?(?:trucks?|tks?|tk's|units?)\b\)?|\(?\btrucks?\s*[:=#x]?\s*(\d{1,2})\b\)?/i;
+const PER_RE=/\(?\b(\d{1,2})\s*[- ]?(?:man|men|person|people|ppl|guys?)\b(?:\s*crews?|\s*per\s*truck)?\)?|\bcrew(?:\s*size)?\s*[:=]\s*(\d{1,2})\b/i;
+function countsFrom(text){
+  const t=String(text||"");const a=t.match(TRUCK_RE),b=t.match(PER_RE);
+  return {trucks:a?+(a[1]||a[2]):null,per:b?+(b[1]||b[2]):null};
+}
+function stripCounts(place){
+  return String(place||"").replace(TRUCK_RE,"").replace(PER_RE,"").replace(/\s*[-–,]\s*$/,"").replace(/^\s*[-–,]\s*/,"").replace(/\s{2,}/g," ").replace(/,\s*,/g,",").trim();
+}
+function fmtTime(t){
+  const m=String(t).toLowerCase().replace(/\s/g,"").match(/^(\d{1,2}?)(?::?(\d{2}))?([ap])m?$/);
+  if(!m)return t;
+  let h=m[1],mm=m[2]||"00";
+  if(!h&&m[2]){h=m[2];mm="00"}
+  return `${+h}:${mm}${m[3]}`;
+}
+function icsDate(v){
+  if(!v)return null;
+  let m=v.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if(m)return new Date(+m[1],m[2]-1,+m[3]);
+  m=v.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})?(Z)?$/);
+  if(!m)return null;
+  return m[7]?new Date(Date.UTC(+m[1],m[2]-1,+m[3],+m[4],+m[5],+(m[6]||0))):new Date(+m[1],m[2]-1,+m[3],+m[4],+m[5],+(m[6]||0));
+}
+const dayKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+function parseICS(text){
+  const lines=text.replace(/\r?\n[ \t]/g,"").split(/\r?\n/);const out=[];let ev=null;let cal="";
+  const un=s=>s.replace(/\\n/gi,"\n").replace(/\\([,;\\])/g,"$1").trim();
+  for(const l of lines){
+    if(l.startsWith("X-WR-CALNAME:"))cal=un(l.slice(13));
+    if(l==="BEGIN:VEVENT")ev={raw:[l]};
+    else if(l==="END:VEVENT"){
+      if(ev&&ev.status!=="CANCELLED"){
+        const t=parseJobTitle(ev.sum);
+        const c=ev.geo||parseCoords(ev.loc);
+        const start=icsDate(ev.start);
+        const dc=countsFrom(ev.desc);
+        const trucks=t.trucks||dc.trucks||null, crew=t.per||dc.per||null;
+        out.push({header:!!t.header,name:t.header?ev.sum:(t.name||ev.sum||"Job"),title:ev.sum||"",time:t.header?"":(t.time||(start&&ev.start.includes("T")?start.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}):"")),
+          address:stripCounts((ev.loc||t.place||"").replace(/\n/g,", ")),place:t.place||"",lat:c?c.lat:null,lng:c?c.lng:null,desc:(ev.desc||"").slice(0,300),start:start?start.toISOString():null,day:start?dayKey(start):"",cal,crew,trucks,rrule:!!ev.rrule,raw:ev.raw.concat("END:VEVENT").join("\n")});
+      }
+      ev=null;
+    }
+    else if(ev){
+      ev.raw.push(l);
+      const i=l.indexOf(":");if(i<0)continue;const k=l.slice(0,i).split(";")[0].toUpperCase(),v=l.slice(i+1);
+      if(k==="SUMMARY")ev.sum=un(v);else if(k==="LOCATION")ev.loc=un(v);else if(k==="DESCRIPTION")ev.desc=un(v);
+      else if(k==="GEO"){const [a,b]=v.split(/[;,]/).map(Number);if(isFinite(a)&&isFinite(b))ev.geo={lat:a,lng:b}}
+      else if(k==="DTSTART")ev.start=v.trim();else if(k==="STATUS")ev.status=v.trim().toUpperCase();else if(k==="RRULE")ev.rrule=v;
+    }
+  }
+  return out;
+}
+/* Plain pasted list of event titles, one per line */
+function parseTitleLines(text){
+  return text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean).map(s=>{const t=parseJobTitle(s);return t.header?{header:true,name:s}:{name:t.name,title:s,time:t.time,address:t.place,place:t.place,lat:null,lng:null,trucks:t.trucks,crew:t.per}});
+}
+async function readAnyFile(file){
+  const n=file.name.toLowerCase();
+  if(n.endsWith(".kmz"))return {kind:"kml",text:await readKMZ(file)};
+  if(n.endsWith(".zip")){
+    if(!window.JSZip)throw new Error("Couldn't open the .zip here. Unzip it first and open the .ics file inside.");
+    const zip=await JSZip.loadAsync(file);
+    const ics=Object.values(zip.files).filter(f=>/\.ics$/i.test(f.name)&&!f.dir);
+    if(!ics.length)throw new Error("No calendar (.ics) file inside that zip.");
+    const texts=await Promise.all(ics.map(f=>f.async("string")));
+    return {kind:"ics",text:texts.join("\n")};
+  }
+  const text=await file.text();
+  if(n.endsWith(".kml")||/<kml[\s>]/i.test(text.slice(0,500)))return {kind:"kml",text};
+  if(n.endsWith(".ics")||/BEGIN:VCALENDAR/.test(text.slice(0,200)))return {kind:"ics",text};
+  return {kind:"csv",text};
+}
+function placesFrom(kind,text){
+  if(kind==="kml")return parseKML(text);
+  if(kind==="ics")return parseICS(text);
+  if(kind==="titles")return parseTitleLines(text);
+  return rowsToPlaces(parseCSV(text));
+}
+function detectKind(text){
+  if(/<kml[\s>]|<Placemark/i.test(text))return "kml";
+  if(/BEGIN:VCALENDAR|BEGIN:VEVENT/.test(text))return "ics";
+  const lines=text.split(/\r?\n/).filter(s=>s.trim());
+  const titled=lines.filter(s=>/^\s*\d{1,4}(?::\d{2})?\s*[ap]m?\s*[-–]/i.test(s)||/^\*+.*\*+$/.test(s.trim())).length;
+  if(lines.length&&titled/lines.length>=0.5)return "titles";
+  return "csv";
+}
+
+/* ---------- jobs ---------- */
+/* Find roster people named in a calendar event ("Req: Marcus, Lena" or full names anywhere). */
+function findRequested(text){
+  const t=" "+String(text||"").replace(/\s+/g," ")+" ";const low=t.toLowerCase();
+  const ws=roster.workers.filter(w=>w.name&&w.active!==false);
+  const out=new Set();
+  const wb=n=>new RegExp("(^|[^a-z])"+n.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"($|[^a-z])");
+  for(const w of ws){const n=w.name.replace(/\(.*?\)/g,"").trim();if(n.split(" ").length>=2&&wb(n).test(low))out.add(w.id)}
+  // after "req", "request(ed)", "need", "use", "crew:", "lead:" — match unique first or last names
+  const segs=[...t.matchAll(/\b(?:req(?:uest(?:ed|s)?)?|need(?:s|ed)?|use|send|crew|lead(?:er)?s?|workers?)\b\.?\s*[:\-–]?\s*([^\n;|]+)/gi)].map(m=>m[1]);
+  for(const seg of segs){
+    for(const tok of seg.split(/,|\/|&|\band\b|\+/i).map(x=>x.trim()).filter(Boolean)){
+      const words=tok.toLowerCase().replace(/[^a-z' -]/g," ").split(/\s+/).filter(x=>x.length>1);
+      if(!words.length)continue;
+      const hit=ws.filter(w=>{const parts=w.name.replace(/\(.*?\)/g,"").toLowerCase().split(/\s+/);return words.every(x=>parts.includes(x))});
+      if(hit.length===1)out.add(hit[0].id);
+    }
+  }
+  return [...out];
+}
+const toJob=p=>({id:uid(),name:p.name,title:p.title||"",time:p.time||"",day:p.day||"",address:p.address||"",place:p.place||"",lat:p.lat,lng:p.lng,geoNote:"",desc:p.desc||"",folder:p.folder||"",crew:p.crew||S().defaultCrew,trucks:p.trucks||1,requested:findRequested((p.title||p.name||"")+" \n "+(p.desc||"")),on:true});
+function setJobs(places,source){
+  tonight.jobs=places.map(toJob);
+  tonight.assign=null;tonight.locks={};tonight.importedAt=new Date().toISOString();tonight.source=source;
+  save("tonight");
+}
+async function addJobs(places,source){
+  const heads=places.filter(p=>p.header).length;
+  places=places.filter(p=>!p.header);
+  if(!places.length){toast("No jobs found");return}
+  if(tonight.jobs.length){
+    const r=await ask(`You already have ${tonight.jobs.length} job(s). Replace them with these ${places.length}, or add to the list?`,"Replace","Add to list");
+    if(r===null)return;
+    if(r)setJobs(places,source);
+    else{tonight.jobs.push(...places.map(toJob));tonight.assign=null;save("tonight")}
+  } else setJobs(places,source);
+  const nReq=tonight.jobs.filter(j=>(j.requested||[]).length).length;
+  render();toast(`${places.length} job(s) loaded${heads?` · ${heads} heading(s) skipped`:""}${nReq?` · ${nReq} with requested crew`:""}`);
+  geocodeMissing("jobs");
+}
+/* For calendar files: pick which day (and calendar) to load */
+function pickDay(evs){
+  const cals=[...new Set(evs.map(e=>e.cal).filter(Boolean))];
+  const now=new Date();const today=dayKey(now);
+  const tmr=new Date(now);tmr.setDate(tmr.getDate()+1);const tomorrow=dayKey(tmr);
+  const from=new Date(now);from.setDate(from.getDate()-2);const fromK=dayKey(from);
+  const to=new Date(now);to.setDate(to.getDate()+21);const toK=dayKey(to);
+  return new Promise(res=>{
+    const bg=document.createElement("div");bg.className="modalbg";
+    const build=()=>{
+      const cal=bg.querySelector("#pkCal")?.value||"";
+      const pool=evs.filter(e=>!e.header&&(!cal||e.cal===cal));
+      const counts={};pool.forEach(e=>{if(e.day)counts[e.day]=(counts[e.day]||0)+1});
+      let days=Object.keys(counts).filter(d=>d>=fromK&&d<=toK).sort();
+      if(!days.length)days=Object.keys(counts).sort().reverse().slice(0,20);
+      const def=days.includes(today)?today:(days.find(d=>d>=today)||days[days.length-1]);
+      const lab=d=>{const [y,m,dd]=d.split("-").map(Number);const dt=new Date(y,m-1,dd);return dt.toLocaleDateString([], {weekday:"short",month:"short",day:"numeric"})+(d===today?" (today)":d===tomorrow?" (tomorrow)":"")};
+      bg.querySelector("#pkDay").innerHTML=days.map(d=>`<option value="${d}" ${d===def?"selected":""}>${esc(lab(d))} — ${counts[d]} job${counts[d]>1?"s":""}</option>`).join("")||`<option value="">No dated events found</option>`;
+    };
+    bg.innerHTML=`<div class="modal"><h3 style="margin-top:0">Which day's jobs?</h3>
+      ${cals.length>1?`<label class="f">Calendar</label><select id="pkCal"><option value="">All calendars</option>${cals.map(c=>`<option>${esc(c)}</option>`).join("")}</select>`:""}
+      <label class="f">Day</label><select id="pkDay"></select>
+      <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="b" data-r="c">Cancel</button><button class="b p" data-r="o">Load jobs</button></div></div>`;
+    document.body.appendChild(bg);build();
+    bg.querySelector("#pkCal")?.addEventListener("change",build);
+    bg.addEventListener("click",e=>{const r=e.target.dataset.r;if(!r)return;
+      const day=bg.querySelector("#pkDay").value,cal=bg.querySelector("#pkCal")?.value||"";bg.remove();
+      if(r!=="o")return res(null);
+      const chosen=evs.filter(x=>(!cal||x.cal===cal)&&(x.day===day));
+      chosen.sort((a,b)=>(a.start||"").localeCompare(b.start||""));
+      res(chosen);
+    });
+  });
+}
+let rawImportText="";
+async function importPlaces(kind,places,source){
+  const total=places.length;
+  if(kind==="ics"){
+    const dated=places.filter(p=>p.day);
+    if(dated.length){const c=await pickDay(places);if(!c)return;places=c}
+  }
+  try{
+    const raw=kind==="ics"?places.map(p=>p.raw||"").join("\n"):rawImportText;
+    localStorage.setItem("crew_lastimport",JSON.stringify({at:new Date().toISOString(),source,kind,totalInFile:total,kept:places.length,raw:String(raw).slice(0,400000)}));
+  }catch(e){}
+  logEvent("import",`${kind} from ${source}: ${places.length} kept of ${total}`);
+  places.forEach(p=>delete p.raw);
+  await addJobs(places,source);
+}
+
+/* ---------- address lookup (OpenStreetMap) ---------- */
+let geoBusy=false;
+const geoCache=lsGet("crew_geo")||{};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function geoCandidates(addr){
+  const a=String(addr||"").replace(/\s+/g," ").trim();if(!a)return [];
+  const c=[a];
+  const noUnit=a.replace(/\b(?:apt|apartment|suite|ste|unit|lot|#)\s*[\w-]+/ig,"").replace(/\s+,/g,",").replace(/,\s*,/g,",").trim();
+  if(noUnit!==a)c.push(noUnit);
+  const noCounty=noUnit.split(",").map(s=>s.trim()).filter(s=>s&&!/\bcounty\b|\bco\.?$/i.test(s)).join(", ");
+  if(noCounty&&!c.includes(noCounty))c.push(noCounty);
+  const parts=noCounty.split(",").map(s=>s.trim());
+  const st=parts.findIndex(s=>/^[A-Z]{2}(\s+\d{5})?$/.test(s));
+  if(st>0){const cityState=parts[st-1]+", "+parts[st].slice(0,2);if(!c.includes(cityState))c.push(cityState)}
+  return c;
+}
+let lastGeoCall=0;
+async function geoOne(q){
+  const key=q.toLowerCase();
+  if(geoCache[key])return geoCache[key];
+  const wait=1100-(Date.now()-lastGeoCall);if(wait>0)await sleep(wait);
+  lastGeoCall=Date.now();
+  let res=null,reached=false;
+  try{
+    const r=await fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=us&q="+encodeURIComponent(q),{headers:{"Accept":"application/json"}});
+    reached=true;
+    if(r.ok){const j=await r.json();if(j[0])res={lat:+j[0].lat,lng:+j[0].lon,label:j[0].display_name}}
+  }catch(e){}
+  if(!res){
+    try{
+      const r=await fetch("https://photon.komoot.io/api/?limit=1&lang=en&q="+encodeURIComponent(q));
+      reached=true;
+      if(r.ok){const j=await r.json();const f=(j.features||[]).find(f=>!f.properties||!f.properties.countrycode||f.properties.countrycode==="US");if(f){const p=f.properties||{};res={lat:f.geometry.coordinates[1],lng:f.geometry.coordinates[0],label:[p.name,p.city,p.county,p.state].filter(Boolean).join(", ")}}}
+    }catch(e){}
+  }
+  if(!reached)throw new Error("offline");
+  if(res){geoCache[key]=res;const keys=Object.keys(geoCache);if(keys.length>800)delete geoCache[keys[0]];lsSet("crew_geo",geoCache)}
+  return res;
+}
+async function geocodeAddress(addr){
+  const cands=geoCandidates(addr);const street=/\d/.test(cands[0]||"");
+  for(const q of cands){const r=await geoOne(q);if(r)return {...r,q,exact:q===cands[0]||(!street||/\d/.test(q))}}
+  return null;
+}
+function setGeoStatus(t){document.querySelectorAll(".geoStatus").forEach(e=>{e.textContent=t;e.classList.toggle("hide",!t)})}
+async function geocodeMissing(which,onlyId){
+  if(geoBusy)return;
+  const list=which==="jobs"?tonight.jobs:roster.workers;
+  const todo=list.filter(o=>(onlyId?o.id===onlyId:!hasLoc(o))&&(o.address||o.place));
+  if(!todo.length)return;
+  geoBusy=true;let ok=0,fail=0,offline=false;
+  for(let i=0;i<todo.length;i++){
+    setGeoStatus(`Finding locations… ${i+1} of ${todo.length}`);
+    const o=todo[i];
+    try{
+      const r=await geocodeAddress(o.address||o.place);
+      if(r){o.lat=r.lat;o.lng=r.lng;o.geoNote=(r.exact?"":"Approx. — matched “"+r.q+"”. ")+"Found: "+(r.label||"").split(",").slice(0,4).join(",");ok++}
+      else{o.geoNote="Couldn't find this address — tap to fix";fail++;logEvent("geocode-miss",o.address||o.place)}
+    }catch(e){offline=true;break}
+  }
+  geoBusy=false;setGeoStatus("");
+  save(which==="jobs"?"tonight":"roster");render();
+  if(offline)logEvent("geocode-offline","Address lookup unreachable");
+  if(offline)toast("Can't look up addresses here — use the downloaded file version (needs internet), or paste coordinates.");
+  else toast(`${ok} location${ok===1?"":"s"} found${fail?`, ${fail} not found (marked in red)`:""}`);
+}
+
+/* ---------- workers import ---------- */
+function importWorkers(places){
+  let added=0,updated=0;
+  for(const p of places){
+    const ex=roster.workers.find(w=>w.name.trim().toLowerCase()===p.name.trim().toLowerCase());
+    if(ex){if(p.lat!=null){ex.lat=p.lat;ex.lng=p.lng}if(p.address)ex.address=p.address;if(p.phone)ex.phone=p.phone;if(p.lead)ex.lead=true;if(p.active===false)ex.active=false;if(p.maxMiles)ex.maxMiles=p.maxMiles;updated++}
+    else{roster.workers.push({id:uid(),name:p.name.trim(),address:p.address||"",lat:p.lat,lng:p.lng,phone:p.phone||"",lead:!!p.lead,active:p.active!==false,maxMiles:p.maxMiles||0});added++}
+  }
+  save("roster");render();toast(`${added} added, ${updated} updated`);
+  geocodeMissing("workers");
+}
+
+/* ---------- solver ---------- */
+/* Each job needs `trucks` trucks. Every truck needs exactly one crew lead (they have the company truck)
+   plus (perTruck-1) workers. Spare leads may fill worker spots if the setting allows, but their truck sits idle. */
+const LEADSLOT=15000, SLOT=10000, SPARE=800, IDLETRUCK=3000, PREF=5, VIOL=1e6;
+const jTrucks=j=>Math.max(1,j.trucks|0||1), jPer=j=>Math.max(1,j.crew|0||1);
+/* Route geometry: the lead drives (roughly) straight from home A to job B. For a worker at W we find the
+   closest point on that line. Short distance = lead picks them up at home; otherwise they meet the truck there. */
+function routePoint(W,A,B){
+  const k=Math.cos(A.lat*Math.PI/180)*69.17,m=69.17;
+  const bx=(B.lng-A.lng)*k,by=(B.lat-A.lat)*m,wx=(W.lng-A.lng)*k,wy=(W.lat-A.lat)*m;
+  const L2=bx*bx+by*by;let t=L2?(wx*bx+wy*by)/L2:0;t=Math.max(0,Math.min(1,t));
+  const px=bx*t,py=by*t;
+  return {t,d:Math.hypot(wx-px,wy-py),lat:A.lat+py/m,lng:A.lng+px/k};
+}
+/* The lead's truck drives from the lead's home to the job; workers join along the way.
+   pairCrew picks the truck leads (closest to the job) and gives each worker the nearest lead with room.
+   Used by both the solver and the display so they always agree. */
+function pairCrew(leads,helpers,T,P,dJob,dPair){
+  const ls=[...leads].sort((a,b)=>dJob(a)-dJob(b));
+  const truckLeads=ls.slice(0,T), extra=ls.slice(T);
+  const hs=[...helpers,...extra];
+  const room=truckLeads.map(()=>P-1), of=new Map();
+  if(truckLeads.length&&P>1){
+    const pairs=[];
+    for(const h of hs)truckLeads.forEach((l,k)=>pairs.push([h,k,dPair(h,l)]));
+    pairs.sort((a,b)=>a[2]-b[2]);
+    for(const [h,k,d] of pairs){if(!of.has(h)&&room[k]>0){of.set(h,k);room[k]--}}
+  }
+  return {truckLeads,extra,hs,of};
+}
+function solve(){
+  const _t0=performance.now();
+  try{return solveInner()}finally{logEvent("solve",`Built crews in ${Math.round(performance.now()-_t0)} ms`,{jobs:tonight.jobs.length,workers:roster.workers.length})}
+}
+function solveInner(){
+  const s=S();
+  const jobs=tonight.jobs.filter(j=>j.on&&hasLoc(j));
+  const off=new Set(tonight.off);
+  const ws=roster.workers.filter(w=>w.active!==false&&!off.has(w.id)&&hasLoc(w));
+  const W=ws.length,J=jobs.length;
+  const wIdx=new Map(ws.map((w,i)=>[w.id,i])), jIdx=new Map(jobs.map((j,i)=>[j.id,i]));
+  const cost=ws.map(w=>jobs.map(j=>miles(w,j)));
+  const conflict=ws.map(()=>new Uint8Array(W)), pref=ws.map(()=>new Uint8Array(W));
+  for(const [a,b] of roster.conflicts){if(wIdx.has(a)&&wIdx.has(b)){conflict[wIdx.get(a)][wIdx.get(b)]=1;conflict[wIdx.get(b)][wIdx.get(a)]=1}}
+  for(const [a,b] of roster.prefers){if(wIdx.has(a)&&wIdx.has(b)){pref[wIdx.get(a)][wIdx.get(b)]=1;pref[wIdx.get(b)][wIdx.get(a)]=1}}
+  const T=jobs.map(jTrucks), P=jobs.map(jPer), H=jobs.map((j,i)=>T[i]*(P[i]-1));
+  const cap=jobs.map((j,i)=>T[i]*P[i]);
+  const lead=ws.map(w=>!!w.lead);
+  const lim=ws.map(w=>w.lead?leadLimit(w):0);
+  const locked=new Int32Array(W).fill(-1);
+  for(const j of jobs)for(const wid of (j.requested||[])){if(wIdx.has(wid)&&!tonight.locks[wid]&&locked[wIdx.get(wid)]<0)locked[wIdx.get(wid)]=jIdx.get(j.id)}
+  for(const [wid,jid] of Object.entries(tonight.locks)){if(wIdx.has(wid)&&jIdx.has(jid))locked[wIdx.get(wid)]=jIdx.get(jid)}
+  const elig=(w,j)=>locked[w]===j||locked[w]<0;
+
+  const rdC=new Float64Array(W*W*Math.max(1,J)).fill(-1);
+  const rd=(h,l,j)=>{const i=(j*W+l)*W+h;let v=rdC[i];if(v<0){v=routePoint(ws[h],ws[l],jobs[j]).d*s.roadFactor;rdC[i]=v}return v};
+  const MAXP=50000;
+  function jobScore(crew,j){
+    if(!crew.length)return 0;
+    let sc=0;
+    for(let a=0;a<crew.length;a++){const w=crew[a];
+      for(let b=a+1;b<crew.length;b++){if(conflict[w][crew[b]])return -1e9;if(pref[w][crew[b]])sc+=PREF}}
+    const leadsIn=crew.filter(w=>lead[w]),nonLeads=crew.filter(w=>!lead[w]);
+    const {truckLeads,extra,hs,of}=pairCrew(leadsIn,nonLeads,T[j],P[j],w=>cost[w][j],(h,l)=>rd(h,l,j));
+    if(extra.length&&!s.leadsAsHelpers)sc-=VIOL*extra.length;
+    if(hs.length>H[j])sc-=VIOL*(hs.length-H[j]);
+    for(const l of truckLeads){sc+=LEADSLOT-cost[l][j];if(lim[l]&&cost[l][j]>lim[l]&&locked[l]!==j)sc-=MAXP}
+    for(const h of hs){
+      if(of.has(h)){const d=rd(h,truckLeads[of.get(h)],j);sc+=SLOT-d;if(s.maxMiles&&d>s.maxMiles&&locked[h]!==j)sc-=MAXP}
+      else sc+=SPARE-cost[h][j];
+    }
+    sc-=extra.length*IDLETRUCK;
+    return sc;
+  }
+  function run(noise){
+    const asg=new Int32Array(W).fill(-1), crews=jobs.map(()=>[]);
+    for(let w=0;w<W;w++)if(locked[w]>=0){asg[w]=locked[w];crews[locked[w]].push(w)}
+    const nz=()=>1+noise*(Math.random()-.5);
+    const conflictsWith=(w,j)=>crews[j].some(o=>conflict[w][o]);
+    // 1) leads to trucks, closest to the job first
+    const lp=[];
+    for(let w=0;w<W;w++)if(lead[w]&&locked[w]<0)for(let j=0;j<J;j++)if(!lim[w]||cost[w][j]<=lim[w])lp.push([w,j,cost[w][j]*nz()]);
+    lp.sort((a,b)=>a[2]-b[2]);
+    for(const [w,j] of lp){if(asg[w]>=0)continue;const L=crews[j].filter(o=>lead[o]).length;if(L<T[j]&&!conflictsWith(w,j)){asg[w]=j;crews[j].push(w)}}
+    // 2) workers to the nearest lead's truck that has room
+    const roomFor=j=>{const leadsIn=crews[j].filter(o=>lead[o]);const r=pairCrew(leadsIn,crews[j].filter(o=>!lead[o]),T[j],P[j],w=>cost[w][j],(h,l)=>rd(h,l,j));return r.truckLeads.filter((l,k)=>[...r.of.values()].filter(x=>x===k).length<P[j]-1)};
+    const fill=(cands)=>{
+      for(;;){
+        let best=null;
+        for(let j=0;j<J;j++){
+          if(crews[j].length>=cap[j])continue;
+          const open=roomFor(j);if(!open.length)continue;
+          for(const w of cands){if(asg[w]>=0||locked[w]>=0||conflictsWith(w,j))continue;
+            for(const l of open){const d=rd(w,l,j);if(s.maxMiles&&d>s.maxMiles)continue;const v=d*nz();if(!best||v<best.v)best={w,j,v}}}
+        }
+        if(!best)break;asg[best.w]=best.j;crews[best.j].push(best.w);
+      }
+    };
+    fill([...Array(W).keys()].filter(w=>!lead[w]));
+    if(s.leadsAsHelpers)fill([...Array(W).keys()].filter(w=>lead[w]));
+    // local search
+    const js=crews.map((c,j)=>jobScore(c,j));
+    const without=(c,w)=>c.filter(x=>x!==w);
+    let improved=true,rounds=0;
+    while(improved&&rounds++<60){
+      improved=false;
+      // move into open slot
+      for(let w=0;w<W;w++){
+        if(locked[w]>=0)continue;const from=asg[w];
+        for(let j=0;j<J;j++){
+          if(j===from||crews[j].length>=cap[j]||!elig(w,j))continue;
+          const nj=jobScore([...crews[j],w],j);if(nj<-1e8)continue;
+          let delta=nj-js[j],nf=null;
+          if(from>=0){nf=jobScore(without(crews[from],w),from);delta+=nf-js[from]}
+          if(delta>1e-6){
+            crews[j].push(w);js[j]=nj;
+            if(from>=0){crews[from]=without(crews[from],w);js[from]=nf}
+            asg[w]=j;improved=true;break;
+          }
+        }
+      }
+      // swaps (incl. assigned <-> free)
+      for(let a=0;a<W;a++){
+        if(locked[a]>=0)continue;
+        for(let b=a+1;b<W;b++){
+          if(locked[b]>=0)continue;const ja=asg[a],jb=asg[b];
+          if(ja===jb)continue;
+          if((jb>=0&&!elig(a,jb))||(ja>=0&&!elig(b,ja)))continue;
+          let delta=0,na=null,nb=null;
+          if(ja>=0){na=jobScore([...without(crews[ja],a),b],ja);if(na<-1e8)continue;delta+=na-js[ja]}
+          if(jb>=0){nb=jobScore([...without(crews[jb],b),a],jb);if(nb<-1e8)continue;delta+=nb-js[jb]}
+          if(delta>1e-6){
+            if(ja>=0){crews[ja]=[...without(crews[ja],a),b];js[ja]=na}
+            if(jb>=0){crews[jb]=[...without(crews[jb],b),a];js[jb]=nb}
+            asg[a]=jb;asg[b]=ja;improved=true;
+          }
+        }
+      }
+      // chain: x moves J2 -> open J, free u fills J2
+      for(let j=0;j<J;j++){
+        if(crews[j].length>=cap[j])continue;
+        let done=false;
+        for(let x=0;x<W&&!done;x++){
+          const j2=asg[x];if(j2<0||j2===j||locked[x]>=0||!elig(x,j))continue;
+          const nj=jobScore([...crews[j],x],j);if(nj<-1e8)continue;
+          const base=without(crews[j2],x);
+          for(let u=0;u<W;u++){
+            if(asg[u]>=0||locked[u]>=0||!elig(u,j2))continue;
+            const n2=jobScore([...base,u],j2);if(n2<-1e8)continue;
+            if(nj-js[j]+n2-js[j2]>1e-6){
+              crews[j].push(x);crews[j2]=[...base,u];js[j]=nj;js[j2]=n2;asg[x]=j;asg[u]=j2;improved=true;done=true;break;
+            }
+          }
+        }
+      }
+    }
+    return {asg,crews,score:js.reduce((a,b)=>a+b,0)};
+  }
+  let best=null;
+  const restarts=W>60?6:W>35?12:24;
+  for(let r=0;r<restarts;r++){const res=run(r===0?0:0.6);if(!best||res.score>best.score)best=res}
+  const assign={};
+  jobs.forEach((j,i)=>assign[j.id]=best?best.crews[i].map(w=>ws[w].id):[]);
+  tonight.assign=assign;tonight.solvedAt=new Date().toISOString();
+  const keep={};for(const [wid,m] of Object.entries(tonight.meets||{}))if(assign[m.job]&&assign[m.job].includes(wid)&&assign[m.job].includes(m.lead))keep[wid]=m;tonight.meets=keep;
+  save("tonight");
+}
+
+/* ---------- derived ---------- */
+const wById=id=>roster.workers.find(w=>w.id===id);
+const jById=id=>tonight.jobs.find(j=>j.id===id);
+const pairKey=(a,b)=>a<b?a+"|"+b:b+"|"+a;
+function conflictSet(){return new Set(roster.conflicts.map(([a,b])=>pairKey(a,b)))}
+/* Split a job's people into trucks: each truck gets one lead; each worker meets at the nearest lead's home. */
+const legMiles=(a,b)=>hav(a,b)*S().roadFactor;
+const routeMiles=(w,l,j)=>routePoint(w,l,j).d*S().roadFactor;
+function trucksFor(j,crew){
+  const T=jTrucks(j),P=jPer(j);
+  const people=crew.map(wById).filter(Boolean);
+  const dJob=w=>hasLoc(w)?miles(w,j):1e9;
+  const dPair=(h,l)=>hasLoc(h)&&hasLoc(l)?routeMiles(h,l,j):1e9;
+  const {truckLeads,extra,hs,of}=pairCrew(people.filter(w=>w.lead),people.filter(w=>!w.lead),T,P,dJob,dPair);
+  const trucks=[];for(let i=0;i<T;i++)trucks.push({lead:truckLeads[i]||null,crew:[]});
+  const loose=[];
+  for(const h of hs){if(of.has(h))trucks[of.get(h)].crew.push(h);else loose.push(h)}
+  for(const h of loose){let t=trucks.find(t=>!t.lead&&t.crew.length<P-1)||trucks.find(t=>!t.lead)||trucks.reduce((a,b)=>a.crew.length<=b.crew.length?a:b);t.crew.push(h)}
+  // order each truck's workers by where they join along the route
+  trucks.forEach(t=>{if(t.lead&&hasLoc(t.lead))t.crew.sort((a,b)=>(hasLoc(a)?routePoint(a,t.lead,j).t:2)-(hasLoc(b)?routePoint(b,t.lead,j).t:2))});
+  return {trucks,spareLeads:extra};
+}
+/* How one person gets to the job:
+   lead  → drives home to job
+   pickup→ lead swings by their home (they're on the way)
+   meet  → they drive to a spot on the lead's route and leave their car
+   job   → no lead yet (or the job is closer than any point on the route) */
+function legFor(j,w,truck){
+  if(!hasLoc(w))return null;
+  const L=truck&&truck.lead;
+  if(!L||L===w||!hasLoc(L))return {kind:L===w?"lead":"job",mi:miles(w,j)};
+  const rp=routePoint(w,L,j),mi=rp.d*S().roadFactor;
+  if(mi<=S().pickupMiles)return {kind:"pickup",mi,to:L,point:{lat:w.lat,lng:w.lng},t:rp.t};
+  if(rp.t>=0.97)return {kind:"atjob",mi:miles(w,j),to:L,point:{lat:j.lat,lng:j.lng},t:1};
+  if(rp.t<=0.03)return {kind:"atlead",mi,to:L,point:{lat:L.lat,lng:L.lng},t:0};
+  return {kind:"meet",mi,to:L,point:{lat:rp.lat,lng:rp.lng},t:rp.t};
+}
+const first=n=>String(n||"").split(" ")[0];
+function legText(g){
+  if(!g)return "";
+  if(g.kind==="lead")return `~${fmtMi(g.mi)} mi home to job`;
+  if(g.kind==="job")return `~${fmtMi(g.mi)} mi to job`;
+  if(g.kind==="pickup")return `${esc(first(g.to.name))} picks up at home`;
+  if(g.kind==="atlead")return `~${fmtMi(g.mi)} mi to ${esc(first(g.to.name))}'s`;
+  if(g.kind==="atjob")return `meets at job · ~${fmtMi(g.mi)} mi`;
+  return `meets truck · ~${fmtMi(g.mi)} mi`;
+}
+const gmap=(lat,lng)=>`https://www.google.com/maps/search/?api=1&query=${lat.toFixed(5)},${lng.toFixed(5)}`;
+const gmapParkRide=(lat,lng)=>`https://www.google.com/maps/search/park+and+ride/@${lat.toFixed(5)},${lng.toFixed(5)},12z`;
+function jobIssues(j,crew){
+  const iss=[];const cs=conflictSet();
+  const offS=new Set(tonight.off);
+  for(const wid of (j.requested||[])){const w=wById(wid);if(!w)continue;
+    if(offS.has(wid)||w.active===false)iss.push(["bad",`${w.name} was requested but is off today`]);
+    else if(!crew.includes(wid))iss.push(["warn",`${w.name} was requested for this job but is assigned elsewhere`]);}
+  for(let a=0;a<crew.length;a++)for(let b=a+1;b<crew.length;b++)if(cs.has(pairKey(crew[a],crew[b])))iss.push(["bad",`${wById(crew[a])?.name} and ${wById(crew[b])?.name} can't work together`]);
+  const T=jTrucks(j),P=jPer(j);
+  const {trucks,spareLeads}=trucksFor(j,crew);
+  const noLead=trucks.filter(t=>!t.lead).length;
+  if(noLead)iss.push(["bad",noLead===T?(T>1?`No crew leads — all ${T} trucks need one`:"No crew lead — this truck can't go out"):`${noLead} of ${T} trucks still need a crew lead`]);
+  const helpers=trucks.reduce((n,t)=>n+t.crew.length,0),needH=T*(P-1);
+  if(helpers<needH)iss.push(["warn",`Needs ${needH-helpers} more worker${needH-helpers>1?"s":""}`]);
+  if(helpers>needH)iss.push(["warn",`${helpers-needH} more than needed`]);
+  spareLeads.forEach(w=>iss.push(["warn",`${w.name} (lead) is riding as a worker — their truck stays parked`]));
+  trucks.forEach(t=>{if(t.lead&&hasLoc(t.lead)){const L=leadLimit(t.lead),d=miles(t.lead,j);if(L&&d>L)iss.push(["warn",`${t.lead.name} lives ~${fmtMi(d)} mi from this job — past their ${L}-mile limit`])}});
+  if(noLead){const L0=+S().maxLeadMiles||0;const offS2=new Set(tonight.off);const inRange=roster.workers.filter(w=>w.lead&&w.active!==false&&!offS2.has(w.id)&&hasLoc(w)&&(!leadLimit(w)||miles(w,j)<=leadLimit(w)));
+    if(!inRange.length)iss.push(["warn",L0?`No available crew lead lives within range of this job (default limit ${L0} mi)`:"No available crew lead can reach this job"]);}
+  if(S().maxMiles)trucks.forEach(t=>t.crew.forEach(w=>{if(!w)return;const g=legFor(j,w,t);if(g&&g.kind!=="pickup"&&g.mi>S().maxMiles)iss.push(["warn",`${w.name}'s drive (~${fmtMi(g.mi)} mi) is past the ${S().maxMiles}-mile limit`])}));
+  return iss;
+}
+function assignedIds(){const s=new Set();if(tonight.assign)for(const c of Object.values(tonight.assign))c.forEach(i=>s.add(i));return s}
+function availableWorkers(){const off=new Set(tonight.off);return roster.workers.filter(w=>w.active!==false&&!off.has(w.id))}
+
+/* ---------- UI helpers ---------- */
+function toast(m){const t=document.createElement("div");t.className="toast";t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),2600)}
+function ask(msg,ok="OK",alt=null){
+  return new Promise(res=>{
+    const bg=document.createElement("div");bg.className="modalbg";
+    bg.innerHTML=`<div class="modal"><p style="margin-top:0">${esc(msg)}</p><div class="row" style="justify-content:flex-end"><button class="b" data-r="c">Cancel</button>${alt?`<button class="b" data-r="a">${esc(alt)}</button>`:""}<button class="b p" data-r="o">${esc(ok)}</button></div></div>`;
+    bg.addEventListener("click",e=>{const r=e.target.dataset.r;if(!r&&e.target!==bg)return;bg.remove();res(r==="o"?true:r==="a"?false:null)});
+    document.body.appendChild(bg);
+  });
+}
+function colorFor(i){return PALETTE[i%PALETTE.length]}
+
+/* ---------- render ---------- */
+function render(){
+  document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.tab===tab));
+  const el=$("#app");
+  el.innerHTML=tab==="tonight"?rTonight():tab==="workers"?rWorkers():tab==="rules"?rRules():rHelp();
+}
+function rTonight(){
+  const jobs=tonight.jobs;const noLoc=jobs.filter(j=>!hasLoc(j));
+  const empty=!jobs.length&&!roster.workers.length;
+  let h="";
+  if(empty)h+=`<div class="card"><h2>Welcome</h2><p class="muted small">Start by adding your workers (with home locations) on the <b>Workers</b> tab, then load today's jobs here. Want to see how it works first?</p><button class="b" data-act="sample">Try it with sample data</button></div>`;
+  // step 1
+  h+=`<div class="card"><h2><span class="step">1</span>Load today's jobs</h2>
+  <p class="muted small">After 9 p.m., export the job calendar (see <a href="#" data-act="gohelp">How to</a>) and open the file here. It picks out each job's time, client and town and finds it on the map. You can also paste event titles, one per line.</p>
+  <div class="row"><button class="b p" data-act="pickJobs">Open job file</button><button class="b" data-act="togglePaste">Paste instead</button><button class="b" data-act="addJob">+ Add a job</button>${jobs.length?`<button class="b" data-act="newNight">Start new day</button>`:""}</div>
+  <div id="pasteBox" class="hide"><label class="f">Paste event titles, one per line (e.g. “7a-Lee Electric/Cameron Epps-Raeford, NC”), or CSV rows (Name, Address, Crew)</label><textarea id="pasteTxt"></textarea><div class="row" style="margin-top:6px"><button class="b p" data-act="pasteJobs">Load pasted jobs</button></div></div>
+  <div class="geoStatus good hide"></div>
+  ${editingJob?jobForm():""}`;
+  if(jobs.length){
+    h+=`<h3>${jobs.length} job${jobs.length>1?"s":""}${tonight.importedAt?` <span class="muted small">· loaded ${new Date(tonight.importedAt).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"})}</span>`:""}</h3>`;
+    const canFind=noLoc.filter(j=>j.address||j.place).length;
+    if(noLoc.length)h+=`<div class="warn">${noLoc.length} job(s) have no map location yet and will be skipped. ${canFind?`<button class="b small" data-act="findJobs" style="margin-left:6px">Find locations</button>`:"Tap one to fix it."}</div>`;
+    h+=`<details ${jobs.length<=8?"open":""}><summary class="small">Job list, trucks &amp; crew sizes</summary><div class="list">`+jobs.map(j=>`<div class="item"><input type="checkbox" data-act="jobOn" data-id="${j.id}" ${j.on?"checked":""} title="Include today"><div class="main" data-act="editJob" data-id="${j.id}" style="cursor:pointer"><div class="t">${j.time?`<span class="tag" style="margin:0 4px 0 0">${esc(j.time)}</span>`:""}${esc(j.name)}</div><div class="s">${(j.requested||[]).length?`<span style="color:var(--accent)">Requested: ${esc(j.requested.map(id=>wById(id)?.name).filter(Boolean).join(", "))}</span><br>`:""}${esc(j.address||j.folder||"")}${hasLoc(j)?(j.geoNote&&/Approx/.test(j.geoNote)?` <span style="color:var(--warn)">· approx. location</span>`:""):` <span style="color:var(--bad)">· ${j.address||j.place?"location not found":"no location"}</span>`}</div></div><div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end"><label class="small muted">Trucks<input type="number" min="1" max="20" value="${jTrucks(j)}" data-act="jobTrucks" data-id="${j.id}" style="margin-left:4px;width:54px"></label><label class="small muted">Per truck<input type="number" min="1" max="20" value="${jPer(j)}" data-act="jobCrew" data-id="${j.id}" style="margin-left:4px;width:54px" title="People per truck, including the lead"></label></div><button class="x" data-act="delJob" data-id="${j.id}" title="Remove">×</button></div>`).join("")+`</div></details>`;
+  }
+  h+=`</div>`;
+  // step 2
+  const act=roster.workers.filter(w=>w.active!==false);const off=new Set(tonight.off);
+  h+=`<div class="card"><h2><span class="step">2</span>Who's working today?</h2>`;
+  if(!act.length)h+=`<p class="muted small">No workers yet. Add them on the <a href="#" data-act="goworkers">Workers</a> tab.</p>`;
+  else{
+    const n=act.filter(w=>!off.has(w.id)).length;
+    h+=`<p class="muted small">${n} of ${act.length} available. ★ = crew lead with truck. Tap a name to mark them off today.</p><div class="chips">`+act.map(w=>`<button class="chip ${off.has(w.id)?"off":""}" data-act="toggleOff" data-id="${w.id}">${esc(w.name)}${w.lead?" ★":""}${hasLoc(w)?"":" ⚠"}</button>`).join("")+`</div>`;
+    const nl=act.filter(w=>!hasLoc(w)&&!off.has(w.id));
+    if(nl.length)h+=`<div class="warn">⚠ ${nl.map(w=>esc(w.name)).join(", ")} ${nl.length>1?"have":"has"} no home location and can't be matched.</div>`;
+    const leadsAv=act.filter(w=>w.lead&&!off.has(w.id)).length;
+    const trucksNeed=jobs.filter(j=>j.on).reduce((n,j)=>n+jTrucks(j),0);
+    if(trucksNeed)h+=`<div class="${leadsAv>=trucksNeed?"good":"warn"}">${leadsAv} crew lead${leadsAv===1?"":"s"} available for ${trucksNeed} truck${trucksNeed===1?"":"s"}${leadsAv<trucksNeed?` — ${trucksNeed-leadsAv} truck${trucksNeed-leadsAv>1?"s":""} won't have a lead`:""}.</div>`;
+    if(off.size)h+=`<div class="row" style="margin-top:8px"><button class="b" data-act="allOn">Everyone available</button></div>`;
+  }
+  h+=`</div>`;
+  // step 3
+  const ready=jobs.some(j=>j.on&&hasLoc(j))&&act.some(w=>!off.has(w.id)&&hasLoc(w));
+  h+=`<div class="card"><h2><span class="step">3</span>Build crews</h2>
+  <p class="muted small">Matches the closest available people to each job, keeps people who can't work together apart, and fills every crew it can. Every truck gets one crew lead (★), then workers. Tap 🔒 to keep someone on a job when you rebuild.</p>
+  <div class="row"><button class="b p" data-act="solve" ${ready?"":"disabled"}>${tonight.assign?"Rebuild crews":"Build crews"}</button>${tonight.assign?`<button class="b" data-act="copy">Copy schedule</button><button class="b" data-act="csv">Download CSV</button><button class="b" data-act="clearAsg">Clear</button>`:""}</div>`;
+  if(tonight.assign)h+=rResults();
+  h+=`</div>`;
+  return h;
+}
+function jobForm(){
+  const j=editingJob==="new"?{name:"",address:"",crew:S().defaultCrew,trucks:1}:jById(editingJob)||{};
+  const loc=hasLoc(j)?`${j.lat.toFixed(6)}, ${j.lng.toFixed(6)}`:"";
+  return `<div class="card" style="margin-top:10px;background:var(--bg)"><h3 style="margin-top:0">${editingJob==="new"?"Add a job":"Edit job"}</h3>
+  <label class="f">Job name</label><input type="text" id="jfName" value="${esc(j.name)}">
+  <label class="f">Report time</label><input type="text" id="jfTime" value="${esc(j.time||"")}" placeholder="7:00a">
+  <label class="f">Address (for reference)</label><input type="text" id="jfAddr" value="${esc(j.address)}">
+  <div class="row" style="margin-top:6px"><button class="b small" data-act="findJobForm">Find from address</button></div>
+  <label class="f">Location — found automatically, or paste coordinates / a Google Maps link</label><input type="text" id="jfLoc" value="${esc(loc)}" placeholder="35.0527, -78.8784">
+  ${j.geoNote?`<div class="small ${hasLoc(j)?"muted":""}" style="margin-top:3px;${hasLoc(j)?"":"color:var(--bad)"}">${esc(j.geoNote)}</div>`:""}
+  ${j.title?`<div class="small muted" style="margin-top:6px">Calendar title: ${esc(j.title)}</div>`:""}
+  <label class="f">Requested crew leads &amp; workers <span class="muted">(tap to add or remove)</span></label>
+  <div class="chips" id="jfReq">${[...roster.workers].filter(w=>w.active!==false).sort((a,b)=>(b.lead-a.lead)||a.name.localeCompare(b.name)).map(w=>`<button type="button" class="chip ${(j.requested||[]).includes(w.id)?"":"off"}" style="${(j.requested||[]).includes(w.id)?"background:var(--accent);color:var(--accent-ink);border-color:var(--accent)":"text-decoration:none"}" data-act="reqToggle" data-id="${w.id}">${w.lead?"★ ":""}${esc(w.name)}</button>`).join("")||`<span class="small muted">Add workers first.</span>`}</div>
+  ${j.desc?"":""}
+  <div class="row"><div><label class="f">Trucks</label><input type="number" id="jfTrucks" min="1" max="20" value="${jTrucks(j)}"></div><div><label class="f">People per truck (incl. lead)</label><input type="number" id="jfCrew" min="1" max="20" value="${j.crew||S().defaultCrew}"></div></div>
+  ${j.desc?`<p class="small muted" style="white-space:pre-line">Calendar notes: ${esc(j.desc)}</p>`:""}
+  <div class="row" style="margin-top:10px"><button class="b p" data-act="saveJob">Save</button><button class="b" data-act="cancelJob">Cancel</button></div></div>`;
+}
+/* ---------- meet spots ---------- */
+/* Prefer places meant for all-day parking: Park & Ride lots first, then public no-fee lots.
+   Store, gas station and restaurant lots are filtered out — they often tow cars left all day. */
+const AVOID=/walmart|food lion|harris teeter|lowe'?s|home depot|target|kroger|publix|aldi|lidl|ingles|piggly|dollar|cvs|walgreens|rite aid|mcdonald|burger|wendy|bojangles|hardee|chick|taco|subway|sonic|zaxby|waffle|cracker|gas|fuel|shell|exxon|\bbp\b|citgo|sunoco|marathon|speedway|sheetz|wawa|circle k|kangaroo|7-eleven|quik|\bmart\b|store|shop|mall|plaza|outlet|restaurant|hotel|motel|\binn\b|hospital|apartment|church|school|bank/i;
+function meetFor(wid,leadId,jobId){const m=(tonight.meets||{})[wid];return m&&m.lead===leadId&&m.job===jobId?m:null}
+async function findSpots(pt,home,lead,job){
+  const q=`[out:json][timeout:25];(nwr["park_ride"]["park_ride"!="no"](around:16000,${pt.lat},${pt.lng});nwr["amenity"="parking"]["name"~"[Pp]ark.{0,6}[Rr]ide|Commuter|Carpool"](around:16000,${pt.lat},${pt.lng});nwr["amenity"="parking"]["access"~"^(yes|public)$"]["fee"!~"^yes"](around:7000,${pt.lat},${pt.lng});${S().allowStores?`nwr["shop"~"^(supermarket|department_store|wholesale|hardware|doityourself)$"](around:9000,${pt.lat},${pt.lng});nwr["amenity"="fuel"](around:7000,${pt.lat},${pt.lng});`:""});out center tags 80;`;
+  let data=null;
+  for(const host of ["https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter"]){
+    try{const r=await fetch(host,{method:"POST",body:"data="+encodeURIComponent(q),headers:{"Content-Type":"application/x-www-form-urlencoded"}});if(r.ok){data=await r.json();break}}catch(e){}
+  }
+  if(!data)throw new Error("offline");
+  const out=[];const seen=new Set();
+  for(const e of data.elements||[]){
+    const t=e.tags||{};const lat=e.lat??e.center?.lat,lng=e.lon??e.center?.lon;if(lat==null)continue;
+    const pr=(t.park_ride&&t.park_ride!=="no")||/park.{0,6}ride|commuter|carpool/i.test(t.name||"");
+    const isStore=!!t.shop||t.amenity==="fuel";
+    const name=t.name||t.brand||(pr?"Park & Ride lot":isStore?(t.amenity==="fuel"?"Gas station":"Store"):"Public parking lot");
+    const avoid=isStore||AVOID.test(name+" "+(t.operator||"")+" "+(t.brand||""));
+    if(avoid&&!S().allowStores)continue;
+    if(!isStore&&/private|permit|delivery|^no$/i.test(t.access||""))continue;
+    if(!isStore&&/customers/i.test(t.access||"")&&!S().allowStores)continue;
+    const spot={lat,lng};
+    const fromHome=legMiles(home,spot), off=routePoint(spot,lead,job).d*S().roadFactor;
+    const key=name+Math.round(lat*200)+Math.round(lng*200);if(seen.has(key))continue;seen.add(key);
+    const addr=[t["addr:housenumber"],t["addr:street"],t["addr:city"]].filter(Boolean).join(" ");
+    out.push({name:name+(t.operator&&!name.includes(t.operator)&&!avoid?` (${t.operator})`:""),lat,lng,pr,store:avoid,fromHome,off,score:fromHome+off*1.5-(pr?4:0)+(avoid?1.5:0),
+      note:[pr?"Park & Ride — made for all-day parking":avoid?"⚠ Store / gas station lot — may tow cars left all day, ask the manager":"Public lot, no fee listed",t.capacity?t.capacity+" spaces":"",t.lit==="yes"?"lit":"",addr].filter(Boolean).join(" · ")});
+  }
+  out.sort((a,b)=>a.score-b.score);
+  return out.slice(0,S().allowStores?8:5);
+}
+async function pickSpot(wid,jid){
+  const j=jById(jid),c=tonight.assign?.[jid]||[];const tr=trucksFor(j,c).trucks.find(t=>t.crew.some(w=>w.id===wid));
+  const w=wById(wid);if(!tr||!tr.lead||!w)return;
+  const g=legFor(j,w,tr);if(!g||!g.point)return;
+  const bg=document.createElement("div");bg.className="modalbg";
+  bg.innerHTML=`<div class="modal"><h3 style="margin-top:0">Meet spot for ${esc(w.name)}</h3><p class="small muted">Where ${esc(first(w.name))} leaves their car and rides with ${esc(tr.lead.name)}. Looking for Park &amp; Ride and public lots near the route…</p><label class="row small" style="margin-top:4px"><input type="checkbox" id="spStores" ${S().allowStores?"checked":""}> Include store &amp; gas station lots (Walmart, Food Lion…)</label><div id="spList" class="list"><div class="small muted">Searching…</div></div>
+  <div class="small" style="margin-top:10px"><a href="${gmapParkRide(g.point.lat,g.point.lng)}" target="_blank" rel="noopener">Search Google Maps for Park &amp; Ride here</a> · <a href="${gmap(g.point.lat,g.point.lng)}" target="_blank" rel="noopener">See the meet area</a></div>
+  <p class="small muted" style="margin-bottom:0">Always check posted signs. Park &amp; Ride lots (e.g. NCDOT) are meant for leaving a car all day; store and gas station lots often tow.</p>
+  <div class="row" style="justify-content:flex-end;margin-top:10px">${meetFor(wid,tr.lead.id,jid)?`<button class="b" data-r="clear">Remove spot</button>`:""}<button class="b" data-r="c">Close</button></div></div>`;
+  document.body.appendChild(bg);
+  let spots=[];
+  bg.addEventListener("click",e=>{
+    const r=e.target.closest("[data-r]")?.dataset.r;if(!r)return;
+    if(r==="c"){bg.remove();return}
+    tonight.meets=tonight.meets||{};
+    if(r==="clear")delete tonight.meets[wid];
+    else{const sp=spots[+r];tonight.meets[wid]={name:sp.name,lat:sp.lat,lng:sp.lng,store:!!sp.store,lead:tr.lead.id,job:jid}}
+    bg.remove();save("tonight");render();
+  });
+  const run=async()=>{
+    bg.querySelector("#spList").innerHTML=`<div class="small muted">Searching…</div>`;
+    try{
+      spots=await findSpots(g.point,w,tr.lead,j);
+      bg.querySelector("#spList").innerHTML=spots.length?spots.map((sp,i)=>`<div class="item"><div class="main"><div class="t">${esc(sp.name)}</div><div class="s">${esc(sp.note)}<br>~${fmtMi(sp.fromHome)} mi from ${esc(first(w.name))}'s home · ${sp.off<1?"right on the way":"~"+fmtMi(sp.off)+" mi off the route"} · <a href="${gmap(sp.lat,sp.lng)}" target="_blank" rel="noopener">map</a></div></div><button class="b small p" data-r="${i}">Use</button></div>`).join(""):`<div class="small muted">No ${S().allowStores?"":"Park &amp; Ride or public "}lots found nearby in OpenStreetMap. Try the Google Maps search below${S().allowStores?"":", or include store lots"}.</div>`;
+    }catch(e){bg.querySelector("#spList").innerHTML=`<div class="small muted">Can't search for lots here (this needs the downloaded file version with internet). Use the Google Maps search below.</div>`}
+  };
+  bg.querySelector("#spStores").addEventListener("change",e=>{roster.settings.allowStores=e.target.checked;save("roster");run()});
+  run();
+}
+function rResults(){
+  const asg=tonight.assign;const jobs=tonight.jobs.filter(j=>asg[j.id]);
+  const used=assignedIds();const avail=availableWorkers().filter(w=>hasLoc(w));
+  const free=avail.filter(w=>!used.has(w.id));
+  let need=0,filled=0,tot=0,cnt=0,prob=0;
+  let tNeed=0,tGo=0;
+  jobs.forEach(j=>{const c=asg[j.id];const T=jTrucks(j),P=jPer(j);const {trucks}=trucksFor(j,c);tNeed+=T;tGo+=trucks.filter(t=>t.lead).length;need+=T*P;filled+=Math.min(c.length,T*P);trucks.forEach(t=>[t.lead,...t.crew].forEach(w=>{const g=w&&legFor(j,w,t);if(g){tot+=g.kind==="pickup"?0:g.mi;cnt++}}));if(jobIssues(j,c).length)prob++});
+  let h=`<div class="stats"><div class="stat"><b>${tGo}/${tNeed}</b><span>trucks with a lead</span></div><div class="stat"><b>${filled}/${need}</b><span>spots filled</span></div><div class="stat"><b>${cnt?fmtMi(tot/cnt):"–"} mi</b><span>avg. drive each (approx.)</span></div><div class="stat"><b>${free.length}</b><span>not assigned</span></div><div class="stat"><b>${prob}</b><span>jobs to check</span></div></div>`;
+  if(!prob)h+=`<div class="good">Every truck has a lead and a full crew, with no conflicts.</div>`;
+  h+=rMap(jobs);
+  h+=`<div class="jobs" style="margin-top:10px">`;
+  jobs.forEach((j,i)=>{
+    const crew=asg[j.id]||[];const iss=jobIssues(j,crew);
+    const T=jTrucks(j),P=jPer(j);
+    h+=`<div class="job" style="--c:${colorFor(i)}"><div class="hd"><span class="nm">${j.time?esc(j.time)+" · ":""}${esc(j.name)}</span><span class="small muted">${T>1?T+" trucks · ":""}${crew.length}/${T*P}</span></div>${j.address?`<div class="small muted">${esc(j.address)}</div>`:""}<div style="margin-top:6px">`;
+    const mem=(w,role,t)=>{const lk=tonight.locks[w.id]===j.id;const g=legFor(j,w,t);
+      let extra="";
+      if(role!=="lead"&&g&&(g.kind==="meet"||g.kind==="atlead")){const m=meetFor(w.id,t.lead.id,j.id);
+        extra=`<div class="small" style="padding:0 0 6px 2px">${m?`📍 <a href="${gmap(m.lat,m.lng)}" target="_blank" rel="noopener">${esc(m.name)}</a> · <a href="#" data-act="spot" data-w="${w.id}" data-j="${j.id}">change</a>`:`<a href="#" data-act="spot" data-w="${w.id}" data-j="${j.id}">Pick a meet spot</a> <span class="muted">(optional)</span>`}</div>`}
+      if(role!=="lead"&&g&&g.kind==="pickup"&&w.address)extra=`<div class="small muted" style="padding:0 0 6px 2px">Pickup: ${esc(w.address)}</div>`;
+      return `<div class="mem"><span class="n">${esc(w.name)}${role==="lead"?`<span class="tag lead">lead · truck</span>`:w.lead?`<span class="tag">lead, as worker</span>`:""}${(j.requested||[]).includes(w.id)?`<span class="tag lock">requested</span>`:""}</span><span class="small muted" style="text-align:right">${legText(g)}</span><button class="x" data-act="lock" data-w="${w.id}" data-j="${j.id}" title="${lk?"Unlock":"Keep on this job"}" style="font-size:15px;opacity:${lk?1:.45}">${lk?"🔒":"🔓"}</button><button class="x" data-act="unassign" data-w="${w.id}" data-j="${j.id}" title="Remove">×</button></div>${extra}`};
+    trucksFor(j,crew).trucks.forEach((t,k)=>{
+      h+=`<div style="margin-top:${k?8:0}px">${T>1?`<div class="small" style="font-weight:600">Truck ${k+1}</div>`:""}`;
+      h+=t.lead?mem(t.lead,"lead",t):`<div class="mem"><span class="n" style="color:var(--bad)">Needs a crew lead</span></div>`;
+      t.crew.forEach(w=>h+=mem(w,"worker",t));
+      for(let q=t.crew.length;q<P-1;q++)h+=`<div class="mem"><span class="n muted small">Open worker spot</span></div>`;
+      h+=`</div>`;
+    });
+    h+=`</div>`+iss.map(([k,m])=>`<div class="${k}">${esc(m)}</div>`).join("");
+    const hereLeads=crew.map(wById).filter(w=>w&&w.lead&&hasLoc(w));
+    const opts=avail.filter(w=>!crew.includes(w.id)).map(w=>{let d=miles(w,j),to="";if(!w.lead&&hereLeads.length){const n=hereLeads.reduce((a,b)=>routeMiles(w,a,j)<=routeMiles(w,b,j)?a:b);d=routeMiles(w,n,j);to=d<=S().pickupMiles?" (on "+first(n.name)+"'s way)":" from "+first(n.name)+"'s route"}if(w.lead&&leadLimit(w)&&d>leadLimit(w))to=` (past ${leadLimit(w)}-mi limit)`;return {w,d,to,busy:used.has(w.id)}}).sort((a,b)=>(a.busy-b.busy)||(b.w.lead-a.w.lead)*(hereLeads.length<jTrucks(j)?1:0)||(a.d-b.d));
+    if(opts.length)h+=`<select data-act="assignTo" data-j="${j.id}" style="margin-top:8px"><option value="">+ Add / move someone here…</option>${opts.map(o=>`<option value="${o.w.id}">${o.w.lead?"★ ":""}${esc(o.w.name)}${o.w.lead?" (lead)":""} · ~${fmtMi(o.d)} mi${o.to}${o.busy?" (moves from other job)":""}</option>`).join("")}</select>`;
+    h+=`</div>`;
+  });
+  h+=`</div>`;
+  const usedLeads=[...used].map(wById).filter(w=>w&&w.lead&&hasLoc(w));
+  if(free.length)h+=`<h3>Not assigned today</h3><div class="chips">`+free.map(w=>{let txt="";
+    if(!w.lead&&usedLeads.length){const lj=l=>jById(Object.keys(asg).find(k=>asg[k].includes(l.id)));const rm=l=>{const jj=lj(l);return jj?routeMiles(w,l,jj):1e9};const n=usedLeads.reduce((a,b)=>rm(a)<=rm(b)?a:b);txt=`~${fmtMi(rm(n))} mi from ${esc(n.name)}'s route`}
+    else{let best=null;jobs.forEach(j=>{const d=miles(w,j);if(!best||d<best.d)best={j,d}});if(best)txt=`nearest job ${esc(best.j.name)} ~${fmtMi(best.d)} mi`}
+    return `<span class="chip" style="cursor:default">${w.lead?"★ ":""}${esc(w.name)}${txt?` <span class="muted small">· ${txt}</span>`:""}</span>`}).join("")+`</div>`;
+  return h;
+}
+function rMap(jobs){
+  const pts=[];jobs.forEach(j=>pts.push(j));availableWorkers().filter(hasLoc).forEach(w=>pts.push(w));
+  if(pts.length<2)return "";
+  let minLat=Math.min(...pts.map(p=>p.lat)),maxLat=Math.max(...pts.map(p=>p.lat)),minLng=Math.min(...pts.map(p=>p.lng)),maxLng=Math.max(...pts.map(p=>p.lng));
+  const k=Math.cos((minLat+maxLat)/2*Math.PI/180);
+  let wd=(maxLng-minLng)*k||0.01,ht=(maxLat-minLat)||0.01;
+  const Wd=700,pad=24;const Ht=Math.max(220,Math.min(520,Wd*ht/wd));
+  const sc=Math.min((Wd-2*pad)/wd,(Ht-2*pad)/ht);
+  const X=p=>pad+((p.lng-minLng)*k)*sc+((Wd-2*pad)-wd*sc)/2,Y=p=>pad+(maxLat-p.lat)*sc+((Ht-2*pad)-ht*sc)/2;
+  let s=`<details style="margin-top:10px"><summary class="small">Map view</summary><svg class="map" viewBox="0 0 ${Wd} ${Ht}" role="img" aria-label="Map of jobs and worker homes">`;
+  jobs.forEach((j,i)=>{trucksFor(j,tonight.assign[j.id]||[]).trucks.forEach(t=>{
+    if(t.lead&&hasLoc(t.lead))s+=`<line x1="${X(t.lead)}" y1="${Y(t.lead)}" x2="${X(j)}" y2="${Y(j)}" stroke="${colorFor(i)}" stroke-width="2.5" opacity=".75"/>`;
+    t.crew.forEach(w=>{if(!hasLoc(w))return;const g=legFor(j,w,t);const m=t.lead&&meetFor(w.id,t.lead.id,j.id);const to=m||(g&&g.point)||j;
+      s+=`<line x1="${X(w)}" y1="${Y(w)}" x2="${X(to)}" y2="${Y(to)}" stroke="${colorFor(i)}" stroke-width="1.5" stroke-dasharray="4 3" opacity=".8"/>`;
+      if(g&&g.kind!=="pickup")s+=`<circle cx="${X(to)}" cy="${Y(to)}" r="3.5" fill="${colorFor(i)}"><title>${esc(m?m.name:"Meet "+w.name)}</title></circle>`});
+  })});
+  const used=assignedIds();
+  availableWorkers().filter(hasLoc).forEach(w=>{s+=`<circle cx="${X(w)}" cy="${Y(w)}" r="5" fill="${used.has(w.id)?"var(--card)":"var(--muted)"}" stroke="var(--ink)" stroke-width="1.5"><title>${esc(w.name)} (home)</title></circle>`});
+  jobs.forEach((j,i)=>{s+=`<rect x="${X(j)-7}" y="${Y(j)-7}" width="14" height="14" rx="3" fill="${colorFor(i)}"><title>${esc(j.name)}</title></rect><text x="${X(j)+10}" y="${Y(j)+4}" font-size="12" fill="var(--ink)">${esc(j.name.slice(0,22))}</text>`});
+  s+=`</svg><div class="small muted">■ jobs &nbsp; ○ homes (grey = not assigned). Solid = lead's truck to job, dashed = worker to where they join (dot = meet spot). Straight lines, not roads.</div></details>`;
+  return s;
+}
+function rWorkers(){
+  const ws=roster.workers;
+  let h=`<div class="card"><h2>Workers</h2><p class="muted small">Each worker needs a home location so the tool can measure distance. Addresses stay in this page, visible only to people you share it with.</p>
+  <div class="row"><button class="b p" data-act="addWorker">+ Add worker</button><button class="b" data-act="pickWorkers">Import list (CSV)</button>${ws.some(w=>!hasLoc(w)&&w.address)?`<button class="b" data-act="findWorkers">Find ${ws.filter(w=>!hasLoc(w)&&w.address).length} missing locations</button>`:""}</div>
+  <div class="geoStatus good hide"></div>
+  ${editingWorker?workerForm():""}`;
+  if(!ws.length)h+=`<p class="muted small" style="margin-top:12px">No workers yet.</p>`;
+  else{
+    const sorted=[...ws].sort((a,b)=>a.name.localeCompare(b.name));
+    h+=`<div class="list">`+sorted.map(w=>{
+      const nc=roster.conflicts.filter(p=>p.includes(w.id)).length;
+      return `<div class="item" style="${w.active===false?"opacity:.55":""}"><div class="main" data-act="editWorker" data-id="${w.id}" style="cursor:pointer"><div class="t">${esc(w.name)}${w.lead?`<span class="tag lead">lead${leadLimit(w)?" · "+leadLimit(w)+" mi":""}</span>`:""}${w.active===false?`<span class="tag">inactive</span>`:""}</div><div class="s">${esc(w.address||"")}${hasLoc(w)?"":` <span style="color:var(--bad)">· needs location</span>`}${nc?` · ${nc} can't-work-with`:""}</div></div><button class="b small" data-act="editWorker" data-id="${w.id}">Edit</button></div>`}).join("")+`</div>`;
+  }
+  h+=`</div>`;
+  h+=`<div class="card"><h2>Back up &amp; move to another device</h2>
+  <p class="muted small">Saves every crew lead and worker (names, addresses, locations, phones, lead status), the can't-work-together and work-well-together lists, and your settings. Restore it on another phone or computer, or into a newer version of this tool.</p>
+  <div class="row"><button class="b p" data-act="saveRoster" ${roster.workers.length?"":"disabled"}>Save backup file</button><button class="b" data-act="copyRoster" ${roster.workers.length?"":"disabled"}>Copy backup text</button><button class="b" data-act="restoreRoster">Restore backup</button></div>
+  <div class="row" style="margin-top:8px"><button class="b small" data-act="workersCsv" ${roster.workers.length?"":"disabled"}>Export workers as spreadsheet (CSV)</button></div>
+  ${roster.workers.length?`<p class="small muted" style="margin-bottom:0">Tip: save a backup whenever you add or change workers. Email it to yourself or keep it in Google Drive so it's never lost.</p>`:""}</div>`;
+  return h;
+}
+function workerForm(){
+  const w=editingWorker==="new"?{name:"",address:"",phone:"",lead:false,active:true}:wById(editingWorker)||{};
+  const loc=hasLoc(w)?`${w.lat.toFixed(6)}, ${w.lng.toFixed(6)}`:"";
+  return `<div class="card" style="margin-top:10px;background:var(--bg)"><h3 style="margin-top:0">${editingWorker==="new"?"Add worker":"Edit "+esc(w.name)}</h3>
+  <label class="f">Name</label><input type="text" id="wfName" value="${esc(w.name)}">
+  <label class="f">Home address (for reference)</label><input type="text" id="wfAddr" value="${esc(w.address)}">
+  <div class="row" style="margin-top:6px"><button class="b small" data-act="findWorkerForm">Find from address</button><a href="#" class="small" data-act="openAddr">Check in Google Maps</a></div>
+  <label class="f">Home location — found automatically, or paste coordinates / a Google Maps link</label><input type="text" id="wfLoc" value="${esc(loc)}" placeholder="35.0527, -78.8784">
+  ${w.geoNote?`<div class="small muted" style="margin-top:3px">${esc(w.geoNote)}</div>`:""}
+  <div class="small muted" style="margin-top:3px">If the lookup is off, long-press the house in Google Maps (phone) or right-click it (computer), copy the numbers and paste them here.</div>
+  <label class="f">Phone (optional)</label><input type="tel" id="wfPhone" value="${esc(w.phone)}">
+  <label class="f">Max distance to jobs, miles — crew leads only <span class="muted">(blank = use default${S().maxLeadMiles?" of "+S().maxLeadMiles+" mi":""})</span></label><input type="number" id="wfMax" min="0" max="500" value="${w.maxMiles||""}" placeholder="${S().maxLeadMiles||"no limit"}" style="width:110px">
+  <div class="row" style="margin-top:10px"><label class="row small"><input type="checkbox" id="wfLead" ${w.lead?"checked":""}> Crew lead (has company truck)</label><label class="row small"><input type="checkbox" id="wfActive" ${w.active!==false?"checked":""}> Active (uncheck for long-term off)</label></div>
+  <div class="row" style="margin-top:12px"><button class="b p" data-act="saveWorker">Save</button><button class="b" data-act="cancelWorker">Cancel</button>${editingWorker!=="new"?`<span class="grow"></span><button class="b" data-act="delWorker" style="color:var(--bad)">Delete</button>`:""}</div></div>`;
+}
+function rRules(){
+  const ws=[...roster.workers].sort((a,b)=>a.name.localeCompare(b.name));
+  const sel=id=>`<select id="${id}" class="grow"><option value="">Choose…</option>${ws.map(w=>`<option value="${w.id}">${esc(w.name)}</option>`).join("")}</select>`;
+  const pairList=(arr,kind)=>arr.length?`<div class="list">`+arr.map(([a,b],i)=>`<div class="item"><div class="main"><span class="t">${esc(wById(a)?.name||"?")}</span> ${kind==="c"?"✕":"＋"} <span class="t">${esc(wById(b)?.name||"?")}</span></div><button class="x" data-act="delPair" data-k="${kind}" data-i="${i}">×</button></div>`).join("")+`</div>`:`<p class="muted small">None yet.</p>`;
+  const s=S();
+  return `<div class="card"><h2>Can't work together</h2><p class="muted small">These two people will never be put on the same crew.</p>
+  <div class="row">${sel("cA")}${sel("cB")}<button class="b p" data-act="addPair" data-k="c">Add</button></div>${pairList(roster.conflicts,"c")}</div>
+  <div class="card"><h2>Work well together</h2><p class="muted small">A light preference: they'll be paired when it doesn't cost much extra driving.</p>
+  <div class="row">${sel("pA")}${sel("pB")}<button class="b p" data-act="addPair" data-k="p">Add</button></div>${pairList(roster.prefers,"p")}</div>
+  <div class="card"><h2>Settings</h2>
+  <div class="row"><label class="f grow" style="margin:0">Default people per truck (lead + workers)</label><input type="number" min="1" max="20" data-set="defaultCrew" value="${s.defaultCrew}"></div>
+  <div class="row" style="margin-top:8px"><label class="f grow" style="margin:0"><b>Max distance from crew lead's home to job</b>, miles (0 = no limit). Set a different limit on any lead in their Workers profile.</label><input type="number" min="0" max="500" data-set="maxLeadMiles" value="${s.maxLeadMiles||0}"></div>
+  <div class="row" style="margin-top:8px"><label class="f grow" style="margin:0">Max drive for workers to meet the truck, miles (0 = no limit)</label><input type="number" min="0" max="500" data-set="maxMiles" value="${s.maxMiles}"></div>
+  <div class="row" style="margin-top:8px"><label class="f grow" style="margin:0">Pick up at home if within this many miles of the lead's route</label><input type="number" min="0" max="20" step="0.5" data-set="pickupMiles" value="${s.pickupMiles}"></div>
+  <div class="row" style="margin-top:8px"><label class="f grow" style="margin:0">Road factor (straight-line × this ≈ road miles)</label><input type="number" min="1" max="2" step="0.05" data-set="roadFactor" value="${s.roadFactor}"></div>
+  <p class="small muted" style="margin:10px 0 4px">Every truck always needs one crew lead.</p>
+  <label class="row small" style="margin-bottom:6px"><input type="checkbox" data-set="allowStores" ${s.allowStores?"checked":""}> Meet spot search: include store &amp; gas station lots (Walmart, Food Lion…)</label>
+  <label class="row small"><input type="checkbox" data-set="leadsAsHelpers" ${s.leadsAsHelpers?"checked":""}> If there are spare leads, let them fill worker spots (their truck stays parked)</label>
+  <h3>Backup</h3><div class="row"><button class="b" data-act="saveRoster">Save backup file</button><button class="b" data-act="restoreRoster">Restore backup</button><button class="b" data-act="wipe" style="color:var(--bad)">Delete everything</button></div>
+  <h3>Having a problem?</h3><p class="small muted" style="margin-top:0">Packs every worker, crew rule, today's jobs, the last calendar import, the crews and a log of recent errors into one .zip file you can send for help.</p>
+  <div class="row"><button class="b p" data-act="supportPack">Pack &amp; save for support</button></div>
+  <p class="small muted">Version ${APP_VERSION}</p>
+  </div>`;
+}
+function rHelp(){
+  return `<div class="card"><h2>Each day</h2><ol class="help">
+  <li>After the jobs are posted at 9 p.m., go to <b>calendar.google.com</b> on a computer.</li>
+  <li>Click the <b>⚙ gear</b> → <b>Settings</b>. On the left under “Settings for my calendars” (or “other calendars”), click the job calendar, then <b>Export calendar</b>. A .zip file downloads.</li>
+  <li>On the <b>Today</b> tab, tap <b>Open job file</b> and pick that .zip (or the .ics inside it). Choose the day — it defaults to today.</li>
+  <li>The tool reads each event title — <code>7a-Lee Electric/Cameron Epps-Raeford, NC</code> becomes report time 7:00a, job “Lee Electric / Cameron Epps”, location Raeford, NC — and finds each town on the map. Headings like <code>***Fayetteville Schedule***</code> are skipped. If the title or event notes say how many trucks (e.g. <code>2 trucks</code>) or people (<code>3 man crew</code>), that's filled in too.</li>
+  <li>Check <b>Trucks</b> and <b>Per truck</b> on each job, tap anyone who's off, then <b>Build crews</b>.</li>
+  <li>Fix any yellow or red notes with the “Add / move” menus, then <b>Copy schedule</b> and send it out before 4 a.m.</li></ol>
+  <p class="small muted">The export includes every event on the calendar, past and future. That's fine: only the day you pick is loaded. If “Export calendar” isn't offered, the calendar's owner may need to give you “Make changes” access. In a pinch, tap <b>Paste instead</b> and type or paste the event titles, one per line.</p></div>
+  <div class="card"><h2>Workers' home locations (one time)</h2>
+  <p class="small">Add each worker with their home address and tap <b>Find from address</b>. It looks the address up on OpenStreetMap, which needs an internet connection. To add many at once, use <b>Import list</b> with a CSV that has the columns <code>Name, Address, Phone, Lead</code>; their locations are looked up automatically.</p>
+  <p class="small">If a lookup lands in the wrong spot, long-press the house in Google Maps (phone) or right-click it (computer), copy the two numbers, and paste them into the worker's location box.</p></div>
+  <div class="card"><h2>Having a problem?</h2><p class="small">Go to <b>Crew rules → Pack &amp; save for support</b>. It saves one .zip file with all workers, crew rules, today's jobs, the last calendar import, the crews and a log of recent errors. Send that file along with a note of what went wrong. It contains names, addresses and phone numbers, so only send it to someone you trust.</p></div>
+  <div class="card"><h2>How the matching works</h2><p class="small">Each crew lead drives the company truck from their home to the job, and the job's distance is measured from the lead's home. Workers join the truck along the way. If a worker lives on or near the lead's route (within ${S().pickupMiles} mi, set in Crew rules), the lead picks them up at home. Otherwise the worker drives to a point on the lead's route and leaves their car there. So the tool pairs each worker with the lead whose route passes closest to their home, and fills lead spots first, then worker spots.</p>
+  <p class="small"><b>Lead range:</b> a crew lead is never sent to a job farther from their home than the max distance in Crew rules (or their own limit, set in their Workers profile). If no available lead is in range, the job shows a note so you can raise a limit or assign someone by hand.</p>
+  <p class="small"><b>Meet spots:</b> tap “Pick a meet spot” under a worker to see nearby Park &amp; Ride lots and public parking. Those are meant for leaving a car all day. Store, gas station and restaurant lots (Walmart, Food Lion…) are left out by default because they often tow; tick “Include store &amp; gas station lots” to see them too, marked with a warning. Always check posted signs.</p>
+  <p class="small"><b>Requested crew:</b> if a calendar event names people from your roster — full names anywhere, or first/last names after “Req:”, “Request:”, “Need:”, “Crew:” or “Lead:” (e.g. <code>Req: Marcus, Lena</code>) — they're put on that job automatically and tagged “requested”. You can also tap a job and pick requested people by hand. If a requested person is marked off, the job shows a red note.</p>
+  <p class="small">Distances are straight lines times the road factor (1.25 by default), so “~8 mi” is an estimate, not a route. When a calendar title gives only a town, the job is placed at the town's center. The tool never pairs people marked “can't work together”, and leans toward pairs marked “work well together”. Anyone you lock 🔒 stays put when you rebuild.</p></div>`;
+}
+
+/* ---------- export ---------- */
+function scheduleText(){
+  const jd=(tonight.jobs.find(j=>j.day)||{}).day;
+  const d=jd?new Date(...jd.split("-").map((n,i)=>i===1?n-1:+n)):new Date();
+  let t=`Crews — ${d.toLocaleDateString([], {weekday:"short",month:"short",day:"numeric"})}\n`;
+  tonight.jobs.forEach(j=>{const c=tonight.assign?.[j.id];if(!c)return;const T=jTrucks(j);
+    t+=`\n${j.time?j.time+" · ":""}${j.name}${j.address?" — "+j.address:""}${T>1?` (${T} trucks)`:""}\n`;
+    if(!c.length){t+="  (no one assigned)\n";return}
+    trucksFor(j,c).trucks.forEach((tr,k)=>{
+      const ppl=[tr.lead?`${tr.lead.name} (lead)${tr.lead.phone?" "+tr.lead.phone:""}`:"NEEDS LEAD",...tr.crew.map(w=>w.name+(w.phone?" "+w.phone:""))];
+      t+=`  ${T>1?`Truck ${k+1}: `:"• "}${ppl.join(", ")}\n`;
+      if(tr.lead)tr.crew.forEach(w=>{const g=legFor(j,w,tr);if(!g)return;const m=meetFor(w.id,tr.lead.id,j.id);
+        let how;
+        if(g.kind==="pickup")how=`${first(tr.lead.name)} picks up at home${w.address?" ("+w.address+")":""}`;
+        else if(g.kind==="atjob")how="meets the crew at the job";
+        else if(m)how=`meets ${first(tr.lead.name)} at ${m.name}${m.store?" (store lot — park away from the doors)":""} ${gmap(m.lat,m.lng)}`;
+        else if(g.kind==="atlead")how=`meets at ${first(tr.lead.name)}'s${tr.lead.address?": "+tr.lead.address:""}`;
+        else how=`meets ${first(tr.lead.name)} along the way (~${fmtMi(g.mi)} mi from home) — call to set spot`;
+        t+=`    ${first(w.name)}: ${how}\n`;
+      });
+    });
+  });
+  return t;
+}
+function scheduleCSV(){
+  const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
+  let rows=[["Time","Job","Job address","Truck","Role","Worker","Phone","How they get there","Meet spot","Meet spot map","Approx miles"]];
+  const how={lead:"Drives truck home to job",pickup:"Lead picks up at home",meet:"Meets truck along the way",atlead:"Meets at lead's home",atjob:"Meets at job",job:"Drives to job"};
+  tonight.jobs.forEach(j=>{const c=tonight.assign?.[j.id];if(!c)return;
+    if(!c.length){rows.push([j.time||"",j.name,j.address,"","","","","","","",""]);return}
+    trucksFor(j,c).trucks.forEach((tr,k)=>{
+      if(tr.lead){const g=legFor(j,tr.lead,tr);rows.push([j.time||"",j.name,j.address,k+1,"Lead",tr.lead.name,tr.lead.phone||"",how.lead,"","",g?fmtMi(g.mi):""])}
+      else rows.push([j.time||"",j.name,j.address,k+1,"Lead","(needs lead)","","","","",""]);
+      tr.crew.forEach(w=>{const g=legFor(j,w,tr);const m=tr.lead&&meetFor(w.id,tr.lead.id,j.id);rows.push([j.time||"",j.name,j.address,k+1,"Worker",w.name,w.phone||"",g?how[g.kind]:"",m?m.name:"",m?gmap(m.lat,m.lng):"",g&&g.kind!=="pickup"?fmtMi(g.mi):""])});
+    });
+  });
+  return rows.map(r=>r.map(q).join(",")).join("\n");
+}
+async function copyText(t,msg){try{await navigator.clipboard.writeText(t);toast(msg||"Copied — paste it into a text or group chat")}catch(e){showText(t)}}
+function showText(t){const bg=document.createElement("div");bg.className="modalbg";bg.innerHTML=`<div class="modal"><p style="margin-top:0">Select all and copy:</p><textarea style="min-height:240px">${esc(t)}</textarea><div class="row" style="justify-content:flex-end;margin-top:8px"><button class="b p">Close</button></div></div>`;bg.querySelector("button").onclick=()=>bg.remove();document.body.appendChild(bg);bg.querySelector("textarea").select()}
+async function download(name,data){
+  let dl=null;
+  if(window.claude&&window.claude.use){try{dl=await window.claude.use("downloads")}catch(e){}}
+  if(dl){try{await dl.save({filename:name,data});toast("Saved "+name)}catch(e){if(e&&e.code!=="declined"){if(data instanceof Blob)toast("Couldn't save the file here: "+(e.message||e.code));else showText(data)}}return}
+  try{
+    const type=name.endsWith(".json")?"application/json":name.endsWith(".csv")?"text/csv":"text/plain";
+    const url=URL.createObjectURL(data instanceof Blob?data:new Blob([data],{type}));
+    const a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),4000);toast("Saved "+name+" to your downloads");
+  }catch(e){showText(data)}
+}
+/* ---------- support pack ---------- */
+async function supportPack(){
+  const now=new Date(),stamp=now.toISOString().slice(0,16).replace(/[T:]/g,"-");
+  let lastImport=null;try{lastImport=JSON.parse(localStorage.getItem("crew_lastimport"))}catch(e){}
+  let geo={};try{geo=JSON.parse(localStorage.getItem("crew_geo"))||{}}catch(e){}
+  const issues=tonight.assign?tonight.jobs.filter(j=>tonight.assign[j.id]).map(j=>{const c=tonight.assign[j.id];const iss=jobIssues(j,c);
+    return `${j.time||""} ${j.name}\n${trucksFor(j,c).trucks.map((t,k)=>`  Truck ${k+1}: ${t.lead?t.lead.name+" (lead)":"NO LEAD"}${t.crew.map(w=>{const g=legFor(j,w,t);return ", "+w.name+(g?" ["+g.kind+" ~"+fmtMi(g.mi)+" mi]":"")}).join("")}`).join("\n")}\n${iss.length?iss.map(i=>"  ! "+i[1]).join("\n"):"  (no issues)"}`}).join("\n\n"):"Crews not built yet.";
+  let ls=true;try{localStorage.setItem("crew_t","1");localStorage.removeItem("crew_t")}catch(e){ls=false}
+  const env={appVersion:APP_VERSION,packedAt:now.toISOString(),timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,userAgent:navigator.userAgent,
+    screen:`${screen.width}x${screen.height} @${devicePixelRatio}x`,where:location.protocol==="file:"?"local file":location.host||"claude page",
+    storage:dbOK?"Claude account":"this device",localStorage:ls,online:navigator.onLine,jszip:!!window.JSZip,
+    counts:{workers:roster.workers.length,leads:roster.workers.filter(w=>w.lead).length,jobs:tonight.jobs.length,jobsWithoutLocation:tonight.jobs.filter(j=>!hasLoc(j)).length,workersWithoutLocation:roster.workers.filter(w=>!hasLoc(w)).length,offToday:tonight.off.length,conflicts:roster.conflicts.length,prefers:roster.prefers.length,cachedLookups:Object.keys(geo).length}};
+  const readme=`Crew Scheduler — support pack
+Made ${now.toLocaleString()} · app version ${APP_VERSION}
+
+What's inside:
+  roster-backup.json  Crew leads, workers, crew rules and settings. Can be restored with Workers → Restore backup.
+  today.json          Today's jobs (with the calendar titles/notes), who's off, crews, locks, requested people, meet spots.
+  last-import.json    The raw calendar events (or pasted text) from the last import.
+  schedule.txt        The schedule exactly as "Copy schedule" makes it.
+  crews.csv           The same crews as a spreadsheet.
+  issues.txt          Every job's trucks and any warnings.
+  log.json            Recent errors and actions on this device.
+  environment.json    Browser, device and app details.
+  address-lookups.json  Cached address → map location lookups.
+
+This contains names, addresses and phone numbers. Only share it with someone you trust to help.`;
+  const files={
+    "README.txt":readme,
+    "roster-backup.json":rosterBackup(),
+    "today.json":JSON.stringify(tonight,null,1),
+    "last-import.json":JSON.stringify(lastImport,null,1),
+    "schedule.txt":tonight.assign?scheduleText():"Crews not built yet.",
+    "crews.csv":tonight.assign?scheduleCSV():"",
+    "issues.txt":issues,
+    "log.json":JSON.stringify(LOG,null,1),
+    "environment.json":JSON.stringify(env,null,1),
+    "address-lookups.json":JSON.stringify(geo,null,1),
+  };
+  logEvent("support-pack","Packed for support");
+  if(window.JSZip){
+    try{
+      const zip=new JSZip();const dir=zip.folder(`crew-support-${stamp}`);
+      for(const [n,c] of Object.entries(files))dir.file(n,c);
+      const blob=await zip.generateAsync({type:"blob",compression:"DEFLATE"});
+      await download(`crew-support-${stamp}.zip`,blob);return;
+    }catch(e){logEvent("error","Zip failed: "+(e.message||e))}
+  }
+  // no zip library (offline): one JSON file with everything
+  await download(`crew-support-${stamp}.json`,JSON.stringify({app:"crew-scheduler",kind:"support-pack",files},null,1));
+}
+/* ---------- roster backup / restore ---------- */
+function rosterBackup(){
+  return JSON.stringify({app:"crew-scheduler",kind:"roster",version:2,exportedAt:new Date().toISOString(),
+    roster:{workers:roster.workers,conflicts:roster.conflicts,prefers:roster.prefers,settings:roster.settings}},null,1);
+}
+function workersCSV(){
+  const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
+  const rows=[["Name","Address","Lat","Lng","Phone","Lead","Active","Max miles"]];
+  [...roster.workers].sort((a,b)=>a.name.localeCompare(b.name)).forEach(w=>rows.push([w.name,w.address||"",hasLoc(w)?w.lat:"",hasLoc(w)?w.lng:"",w.phone||"",w.lead?"yes":"",w.active===false?"no":"yes",w.maxMiles||""]));
+  return rows.map(r=>r.map(q).join(",")).join("\n");
+}
+function readBackup(text){
+  let d;try{d=JSON.parse(text)}catch(e){throw new Error("That isn't a Crew Scheduler backup.")}
+  const r=d&&(d.roster||(Array.isArray(d.workers)?d:null));
+  if(!r||!Array.isArray(r.workers))throw new Error("That isn't a Crew Scheduler backup.");
+  const clean=w=>({id:String(w.id||uid()),name:String(w.name||"Unnamed").slice(0,80),address:String(w.address||"").slice(0,200),
+    lat:typeof w.lat==="number"&&Math.abs(w.lat)<=90?w.lat:null,lng:typeof w.lng==="number"&&Math.abs(w.lng)<=180?w.lng:null,
+    phone:String(w.phone||"").slice(0,40),lead:!!w.lead,active:w.active!==false,maxMiles:+w.maxMiles>0?+w.maxMiles:0,geoNote:w.geoNote?String(w.geoNote).slice(0,200):""});
+  const pairs=a=>Array.isArray(a)?a.filter(p=>Array.isArray(p)&&p.length===2).map(p=>[String(p[0]),String(p[1])]):[];
+  return {workers:r.workers.map(clean),conflicts:pairs(r.conflicts),prefers:pairs(r.prefers),settings:r.settings&&typeof r.settings==="object"?r.settings:null};
+}
+async function restoreRoster(text){
+  let b;try{b=readBackup(text)}catch(e){toast(e.message);return}
+  const mode=roster.workers.length?await ask(`This backup has ${b.workers.length} worker${b.workers.length===1?"":"s"}. Replace everyone on this device with it, or merge (add new people, update people with the same name)?`,"Replace","Merge"):true;
+  if(mode===null)return;
+  if(mode){
+    roster.workers=b.workers;roster.conflicts=b.conflicts;roster.prefers=b.prefers;
+    if(b.settings)roster.settings={...DEFAULT_SETTINGS,...b.settings};
+    tonight.assign=null;tonight.locks={};
+  } else {
+    const idMap=new Map();let added=0,updated=0;
+    for(const w of b.workers){
+      const ex=roster.workers.find(x=>x.id===w.id)||roster.workers.find(x=>x.name.trim().toLowerCase()===w.name.trim().toLowerCase());
+      if(ex){idMap.set(w.id,ex.id);const keep=ex.id;Object.assign(ex,w,{id:keep});updated++}
+      else{const nid=roster.workers.some(x=>x.id===w.id)?uid():w.id;idMap.set(w.id,nid);roster.workers.push({...w,id:nid});added++}
+    }
+    const addPairs=(src,dst)=>{for(const [a,c] of src){const A=idMap.get(a),C=idMap.get(c);if(A&&C&&A!==C&&!dst.some(p=>pairKey(p[0],p[1])===pairKey(A,C)))dst.push([A,C])}};
+    addPairs(b.conflicts,roster.conflicts);addPairs(b.prefers,roster.prefers);
+    toast(`${added} added, ${updated} updated`);
+  }
+  logEvent("restore",(mode?"replace":"merge")+` ${b.workers.length} workers`);
+  normalize();save("roster");save("tonight");render();
+  if(mode)toast(`Restored ${b.workers.length} worker${b.workers.length===1?"":"s"} and their crew rules`);
+}
+function restoreDialog(){
+  const bg=document.createElement("div");bg.className="modalbg";
+  bg.innerHTML=`<div class="modal"><h3 style="margin-top:0">Restore workers &amp; crew rules</h3>
+    <p class="small muted">Pick a backup file (crew-roster-….json), or paste the backup text.</p>
+    <label class="b">Choose backup file<input type="file" id="rsFile" accept=".json,application/json,text/plain" class="hide"></label>
+    <label class="f">…or paste backup text</label><textarea id="rsTxt" style="min-height:110px"></textarea>
+    <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="b" data-r="c">Cancel</button><button class="b p" data-r="o">Restore pasted text</button></div></div>`;
+  document.body.appendChild(bg);
+  bg.querySelector("#rsFile").addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;const t=await f.text();bg.remove();restoreRoster(t)});
+  bg.addEventListener("click",e=>{const r=e.target.dataset.r;if(!r)return;const t=bg.querySelector("#rsTxt").value.trim();if(r==="o"&&!t){toast("Paste the backup text first");return}bg.remove();if(r==="o")restoreRoster(t)});
+}
+
+/* ---------- sample data ---------- */
+function loadSample(){
+  const base={lat:35.15,lng:-79.15};
+  const names=["Alex","Brianna","Carlos","Dana","Eli","Fatima","Greg","Hannah","Isaac","Jada","Kevin","Lena","Marcus","Nia","Owen","Paige"];
+  const rnd=(a)=>((Math.sin(a*9301+49297)*233280)%1+1)%1;
+  roster.workers=names.map((n,i)=>({id:uid(),name:n+" (sample)",address:"",lat:+(base.lat+(rnd(i)-.5)*.9).toFixed(5),lng:+(base.lng+(rnd(i+50)-.5)*1.0).toFixed(5),phone:"",lead:i%2===0,active:true}));
+  const W=roster.workers;
+  roster.conflicts=[[W[1].id,W[2].id],[W[5].id,W[8].id]];roster.prefers=[[W[0].id,W[3].id]];
+  const titles=[["7a-Sample Power/Pat Lee-Pittsboro, NC, Chatham County - 2 trucks",35.7201,-79.1772],["630a-Sample Electric/Sam Ray-Aberdeen, NC",35.1315,-79.4295],["630a-Sample Paving/Kim Cole-Fayetteville, NC",35.0527,-78.8784],["7a-Sample Power/Jo Park-Sanford, NC, Lee County",35.4799,-79.1803],["7a-Sample Electric/Lee Fox-Raeford, NC",34.9810,-79.2242],["7a-Sample DOT/Crew #1-Laurinburg, NC",34.7741,-79.4628],["7a-Sample DOT/Crew #2-Laurinburg, NC",34.7741,-79.4628]];
+  tonight.jobs=titles.map(([t,lat,lng])=>{const p=parseJobTitle(t);return toJob({name:p.name+" (sample)",title:t,time:p.time,address:p.place,place:p.place,lat,lng,trucks:p.trucks})});
+  tonight.assign=null;tonight.locks={};tonight.off=[];tonight.importedAt=new Date().toISOString();
+  save("roster");save("tonight");render();toast("Sample data loaded — delete it from Crew rules → Delete everything");
+}
+
+/* ---------- events ---------- */
+$("#tabs").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;tab=b.dataset.tab;editingWorker=null;editingJob=null;render();window.scrollTo(0,0)});
+document.addEventListener("click",async e=>{
+  const el=e.target.closest("[data-act]");if(!el)return;
+  const a=el.dataset.act,id=el.dataset.id;
+  if(el.tagName==="SELECT"||(el.tagName==="INPUT"&&el.type!=="checkbox"))return;
+  if(el.tagName==="A")e.preventDefault();
+  switch(a){
+    case "sample":loadSample();break;
+    case "gohelp":tab="help";render();break;
+    case "goworkers":tab="workers";render();break;
+    case "pickJobs":$("#fileJobs").value="";$("#fileJobs").click();break;
+    case "pickWorkers":$("#fileWorkers").value="";$("#fileWorkers").click();break;
+    case "togglePaste":$("#pasteBox").classList.toggle("hide");break;
+    case "pasteJobs":{
+      const t=$("#pasteTxt").value.trim();if(!t)return;
+      try{const k=detectKind(t);rawImportText=t;let p=placesFrom(k,t);p=p.filter(x=>x.name);if(!p.length)throw new Error("No jobs found in that text.");await importPlaces(k,p,"paste")}catch(err){toast(err.message)}
+      break;}
+    case "addJob":editingJob="new";render();break;
+    case "reqToggle":{const on=el.classList.toggle("off");el.style.cssText=on?"text-decoration:none":"background:var(--accent);color:var(--accent-ink);border-color:var(--accent)";break;}
+    case "findJobs":geocodeMissing("jobs");break;
+    case "findWorkers":geocodeMissing("workers");break;
+    case "findJobForm":case "findWorkerForm":{
+      const isJ=a==="findJobForm";const ad=$(isJ?"#jfAddr":"#wfAddr").value.trim();if(!ad){toast("Type the address first");return}
+      el.disabled=true;el.textContent="Looking…";
+      try{const r=await geocodeAddress(ad);if(r){$(isJ?"#jfLoc":"#wfLoc").value=r.lat.toFixed(6)+", "+r.lng.toFixed(6);toast((r.exact?"Found: ":"Approx. match: ")+(r.label||"").split(",").slice(0,3).join(","))}else toast("Couldn't find that address — try adding the town and state")}
+      catch(e){toast("Can't look up addresses here — use the downloaded file version, or paste coordinates.")}
+      el.disabled=false;el.textContent="Find from address";break;}
+    case "editJob":editingJob=id;render();setTimeout(()=>$("#jfName")?.scrollIntoView({block:"center"}),0);break;
+    case "cancelJob":editingJob=null;render();break;
+    case "saveJob":{
+      const name=$("#jfName").value.trim()||"Job";const c=parseCoords($("#jfLoc").value);
+      if($("#jfLoc").value.trim()&&!c){toast("Couldn't read that location — paste like 40.01, -82.98");return}
+      const crew=Math.max(1,+$("#jfCrew").value||S().defaultCrew);const trucks=Math.max(1,+$("#jfTrucks").value||1);
+      const time=$("#jfTime").value.trim();const addr=$("#jfAddr").value.trim();
+      const requested=[...document.querySelectorAll("#jfReq .chip")].filter(c=>!c.classList.contains("off")).map(c=>c.dataset.id);
+      let jid=editingJob;
+      if(editingJob==="new"){jid=uid();tonight.jobs.push({id:jid,name,time,address:addr,lat:c?c.lat:null,lng:c?c.lng:null,desc:"",folder:"",crew,trucks,requested,on:true})}
+      else{const j=jById(editingJob);const moved=!c||!hasLoc(j)||Math.abs(c.lat-j.lat)>1e-6||Math.abs(c.lng-j.lng)>1e-6;Object.assign(j,{name,time,address:addr,lat:c?c.lat:null,lng:c?c.lng:null,crew,trucks,requested});if(moved)j.geoNote=c?"Set by hand":""}
+      editingJob=null;save("tonight");render();
+      if(!c&&addr)geocodeMissing("jobs",jid);
+      break;}
+    case "jobOn":{const j=jById(id);j.on=el.checked;save("tonight");break;}
+    case "delJob":tonight.jobs=tonight.jobs.filter(j=>j.id!==id);if(tonight.assign)delete tonight.assign[id];for(const k in tonight.locks)if(tonight.locks[k]===id)delete tonight.locks[k];save("tonight");render();break;
+    case "newNight":if(await ask("Clear today's jobs, crews and who's-off list? Workers and crew rules stay.","Start new day")){tonight={jobs:[],assign:null,locks:{},off:[],importedAt:null,source:""};save("tonight");render()}break;
+    case "toggleOff":{const s=new Set(tonight.off);s.has(id)?s.delete(id):s.add(id);tonight.off=[...s];
+      if(s.has(id)){delete tonight.locks[id];if(tonight.assign)for(const k in tonight.assign)tonight.assign[k]=tonight.assign[k].filter(x=>x!==id)}
+      save("tonight");render();break;}
+    case "allOn":tonight.off=[];save("tonight");render();break;
+    case "solve":{el.disabled=true;el.textContent="Working…";setTimeout(()=>{solve();render()},20);break;}
+    case "clearAsg":tonight.assign=null;tonight.locks={};save("tonight");render();break;
+    case "copy":copyText(scheduleText());break;
+    case "csv":download("crews-"+new Date().toISOString().slice(0,10)+".csv",scheduleCSV());break;
+    case "spot":pickSpot(el.dataset.w,el.dataset.j);break;
+    case "lock":{const w=el.dataset.w,j=el.dataset.j;if(tonight.locks[w]===j)delete tonight.locks[w];else tonight.locks[w]=j;save("tonight");render();break;}
+    case "unassign":{const w=el.dataset.w,j=el.dataset.j;tonight.assign[j]=tonight.assign[j].filter(x=>x!==w);delete tonight.locks[w];save("tonight");render();break;}
+    case "addWorker":editingWorker="new";render();setTimeout(()=>$("#wfName")?.focus(),0);break;
+    case "editWorker":editingWorker=id;render();setTimeout(()=>$("#wfName")?.scrollIntoView({block:"center"}),0);break;
+    case "cancelWorker":editingWorker=null;render();break;
+    case "openAddr":{const ad=$("#wfAddr").value.trim();if(!ad){toast("Type the address first");return}
+      const url="https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(ad);
+      const link=document.createElement("a");link.href=url;link.target="_blank";link.rel="noopener";document.body.appendChild(link);link.click();link.remove();break;}
+    case "saveWorker":{
+      const name=$("#wfName").value.trim();if(!name){toast("Name is required");return}
+      const lt=$("#wfLoc").value.trim();const c=parseCoords(lt);
+      if(lt&&!c){toast("Couldn't read that location — paste like 40.01, -82.98");return}
+      const data={name,address:$("#wfAddr").value.trim(),lat:c?c.lat:null,lng:c?c.lng:null,phone:$("#wfPhone").value.trim(),lead:$("#wfLead").checked,active:$("#wfActive").checked,maxMiles:Math.max(0,parseFloat($("#wfMax").value)||0)};
+      let wid=editingWorker;
+      if(editingWorker==="new"){wid=uid();roster.workers.push({id:wid,...data})}else{const ow=wById(editingWorker);if(c&&hasLoc(ow)&&(Math.abs(c.lat-ow.lat)>1e-6||Math.abs(c.lng-ow.lng)>1e-6))data.geoNote="Set by hand";Object.assign(ow,data)}
+      editingWorker=null;save("roster");render();
+      if(!c&&data.address)geocodeMissing("workers",wid);
+      break;}
+    case "delWorker":{const w=wById(editingWorker);if(!w)return;if(!await ask(`Delete ${w.name}? Their crew rules are removed too.`,"Delete"))return;
+      roster.workers=roster.workers.filter(x=>x.id!==w.id);roster.conflicts=roster.conflicts.filter(p=>!p.includes(w.id));roster.prefers=roster.prefers.filter(p=>!p.includes(w.id));
+      if(tonight.assign)for(const k in tonight.assign)tonight.assign[k]=tonight.assign[k].filter(x=>x!==w.id);delete tonight.locks[w.id];
+      tonight.jobs.forEach(j=>{if(j.requested)j.requested=j.requested.filter(x=>x!==w.id)});
+      editingWorker=null;save("roster");save("tonight");render();break;}
+    case "addPair":{const k=el.dataset.k;const A=$(k==="c"?"#cA":"#pA").value,B=$(k==="c"?"#cB":"#pB").value;
+      if(!A||!B||A===B){toast("Pick two different people");return}
+      const arr=k==="c"?roster.conflicts:roster.prefers;if(arr.some(p=>pairKey(p[0],p[1])===pairKey(A,B))){toast("Already listed");return}
+      const other=k==="c"?roster.prefers:roster.conflicts;const oi=other.findIndex(p=>pairKey(p[0],p[1])===pairKey(A,B));if(oi>=0)other.splice(oi,1);
+      arr.push([A,B]);save("roster");render();break;}
+    case "delPair":{const arr=el.dataset.k==="c"?roster.conflicts:roster.prefers;arr.splice(+el.dataset.i,1);save("roster");render();break;}
+    case "supportPack":{el.disabled=true;const tx=el.textContent;el.textContent="Packing…";try{await supportPack()}finally{el.disabled=false;el.textContent=tx}break;}
+    case "saveRoster":download(`crew-roster-${new Date().toISOString().slice(0,10)}.json`,rosterBackup());break;
+    case "copyRoster":copyText(rosterBackup(),"Backup copied — paste it into an email or note to yourself");break;
+    case "restoreRoster":restoreDialog();break;
+    case "workersCsv":download(`crew-workers-${new Date().toISOString().slice(0,10)}.csv`,workersCSV());break;
+    case "wipe":if(await ask("Delete all workers, rules and jobs? This can't be undone.","Delete everything")){roster={workers:[],conflicts:[],prefers:[],settings:{...DEFAULT_SETTINGS}};tonight={jobs:[],assign:null,locks:{},off:[],importedAt:null,source:""};save("roster");save("tonight");render()}break;
+  }
+});
+document.addEventListener("change",e=>{
+  const el=e.target;
+  if(el.dataset.act==="jobCrew"){const j=jById(el.dataset.id);j.crew=Math.max(1,+el.value||1);save("tonight");if(tonight.assign)render();return}
+  if(el.dataset.act==="jobTrucks"){const j=jById(el.dataset.id);j.trucks=Math.max(1,+el.value||1);save("tonight");if(tonight.assign)render();return}
+  if(el.dataset.act==="assignTo"){const wid=el.value,jid=el.dataset.j;if(!wid)return;
+    for(const k in tonight.assign)tonight.assign[k]=tonight.assign[k].filter(x=>x!==wid);
+    tonight.assign[jid].push(wid);tonight.locks[wid]=jid;save("tonight");render();return}
+  if(el.dataset.set){const k=el.dataset.set;roster.settings[k]=el.type==="checkbox"?el.checked:Math.max(0,parseFloat(el.value)||0);if(k==="roadFactor"&&roster.settings[k]<1)roster.settings[k]=1;if(k==="defaultCrew"&&roster.settings[k]<1)roster.settings[k]=1;save("roster");return}
+
+});
+$("#fileJobs").addEventListener("change",async e=>{
+  const f=e.target.files[0];if(!f)return;
+  try{const {kind,text}=await readAnyFile(f);rawImportText=kind==="ics"?"":text;const p=placesFrom(kind,text);if(!p.length)throw new Error("No jobs found in that file.");await importPlaces(kind,p,f.name)}catch(err){logEvent("import-error",(err.message||err)+" — "+f.name);toast(err.message||"Couldn't read that file")}
+});
+$("#fileWorkers").addEventListener("change",async e=>{
+  const f=e.target.files[0];if(!f)return;
+  try{const {kind,text}=await readAnyFile(f);const p=placesFrom(kind,text).filter(x=>x.name&&x.name!=="Unnamed");if(!p.length)throw new Error("No people found in that file.");
+    p.forEach(x=>{if(!x.address&&x.desc)x.address=x.desc.split("\n")[0].slice(0,120)});importWorkers(p)}catch(err){toast(err.message||"Couldn't read that file")}
+});
+
+render();
+initDB();
+</script>
+</body>
+</html>
