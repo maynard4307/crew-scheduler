@@ -4,7 +4,7 @@
 
 - Live app: https://maynard4307.github.io/crew-scheduler/
 - Repository: https://github.com/maynard4307/crew-scheduler (public; GitHub Pages from `main`, root)
-- Current version: **2026.11.09-g** (shown in the app's top bar; tap it for What's new)
+- Current version: **2026.11.09-h** (shown in the app's top bar; tap it for What's new)
 - Owner: maynard4307 · Primary user: the owner's brother (dispatcher, iPhone + PC)
 
 ## 1. What it's for
@@ -66,7 +66,7 @@ On the Claude artifact the roster/today also sync through the artifact database 
 ### Main code areas (search these names in `index.html`)
 
 - Import: `parseJobTitle`, `parseICS`, `parseKML`, `rowsToPlaces`, `importPlaces`, `pickDay`, `findRequested`, `countsFrom`
-- Geocoding: `geocodeAddress`, `geocodeMissing`
+- Geocoding: `geocodeAddress`, `geocodeMissing`. Location checks: `locWarn` (wrong town vs. the typed address, town-center-only match, or > `FAR_MI` (75) mi from every worker), shown in orange on job/worker lists and forms, a Today banner, and `jobIssues`. Jobs/workers keep the full lookup label in `geoLabel`; "Set by hand" locations are never flagged.
 - Routing: `travel` (cached real time or estimate), `ors`, `orsMatrix`, `orsRoute`, `warmBeforeSolve`, `warmPlans`, `planPairs`, `meetPoint`
 - Matching: `solve` → `solveInner` (greedy: leads → workers → spare leads, then local search with moves/swaps/chains, ~6–24 random restarts), `pairCrew`, `jobScore`
 - Per-truck view: `trucksFor`, `legFor` (lead / pickup / meet / atlead / atjob / job), `planTruck` (leave-by timeline), `jobIssues`
@@ -123,4 +123,5 @@ Never commit backups, support packs, CSVs or keys (`.gitignore` blocks `*.json`,
 | Nov 9, 2026 | Real road times via OpenRouteService (free); arrive 15 min early, 5 min per stop, both adjustable |
 | Nov 9, 2026 | Pickup decided by extra minutes for the lead (≤ 10, adjustable), not miles from the route |
 | Nov 9, 2026 | If meeting the truck barely beats driving to the job, worker drives to the job |
+| Nov 9, 2026 | Jobs are often typed in by hand (not only from the calendar): warn when a typed address lands in another town, only the town center, or far from everyone |
 | Nov 9, 2026 | Backup files opened with Import list are restored as backups (not read as CSV); older backups (version 2, `pickupMiles` setting) still load |

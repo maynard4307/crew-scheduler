@@ -111,9 +111,10 @@ code{background:var(--chip);padding:1px 5px;border-radius:5px;font-size:13px;ove
 <script>
 "use strict";
 /* ---------- state ---------- */
-const APP_VERSION="2026.11.09-g";
+const APP_VERSION="2026.11.09-h";
 /* Release notes — newest first. Add an entry here with every update. */
 const CHANGELOG=[
+ {v:"2026.11.09-h",date:"Nov 9, 2026",added:["Warning when a typed address lands in the wrong place: the map found a different town than the one you typed, only the town center (not the street), or a spot far from all your workers.","Jobs and workers with a location that looks off are marked in orange, listed at the top of the Today tab, and flagged on the crews, with how to paste the exact spot from Google Maps."]},
  {v:"2026.11.09-g",date:"Nov 9, 2026",fixed:["Opening a backup file with Workers → Import list now restores it properly. Before, it turned every line of the backup into a fake “worker” (like “{” or “name: …”) and the real people didn't come in.","Restoring a backup also clears out those fake rows if an earlier import left them behind.","Opening a backup file in the Today tab now says to use Restore backup instead of making junk jobs."]},
  {v:"2026.11.09-f",date:"Nov 9, 2026",fixed:["A worker whose meet point would be basically at the job site (or barely closer than the job) is now told to drive straight to the job instead."]},
  {v:"2026.11.09-e",date:"Nov 9, 2026",added:["Pickups are now decided by time: a lead picks a worker up at home if it adds no more than 10 minutes to the drive (adjustable); otherwise the worker meets the truck along the way.","Real road drive times (free OpenRouteService key, set in Crew rules): matching, pickups and meet points now follow actual roads and minutes, not straight lines.","Leave-by times for everyone: when each lead leaves home, when each pickup should be ready, and when each worker leaves to meet the truck.","Arrive-early buffer (15 min) and minutes per pickup or meet stop (5 min) — both adjustable in Crew rules.","Without a routing key, times are estimated (shown with ≈) at an adjustable average speed."]},
@@ -235,6 +236,42 @@ function parseCoords(txt){
   if(!isFinite(lat)||!isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180)return null;
   return {lat,lng};
 }
+/* ---------- location checks ----------
+   Typed addresses sometimes land in the wrong place (address ranges, highway numbers) or only match the town.
+   locWarn() explains what looks off so the dispatcher can paste the exact spot from Google Maps. */
+const FAR_MI=75;
+function typedTown(addr){
+  const a=String(addr||"");const zip=(a.match(/\b(\d{5})(?:-\d{4})?\b(?!.*\b\d{5}\b)/)||[])[1]||"";
+  const ps=a.split(",").map(x=>x.trim());
+  for(let i=1;i<ps.length;i++)if(/^(NC|SC|VA|GA|TN|North Carolina|South Carolina)(\s+\d{5}(-\d{4})?)?(\s+(USA|United States.*))?$/i.test(ps[i])){
+    const t=ps[i-1];if(t&&!/\d/.test(t))return {town:t,zip};break}
+  return {town:"",zip};
+}
+function labelPlace(label){
+  const ps=String(label||"").split(",").map(x=>x.trim()).filter(Boolean);
+  const c=ps.findIndex(x=>/County$/i.test(x));if(c>0)return ps[c-1];
+  const st=ps.findIndex(x=>/^(North Carolina|South Carolina|Virginia|Georgia|Tennessee)$/i.test(x));if(st>=2)return ps[st-2];
+  return ps[0]||"another place";
+}
+function locWarn(o,kind){
+  if(!o||!hasLoc(o))return "";
+  const note=o.geoNote||"";if(/^Set by hand/.test(note))return "";
+  const full=o.geoLabel||"",label=full||(note.split("Found:")[1]||"").trim();
+  const approx=/^Approx/.test(note);const out=[];
+  const {town,zip}=typedTown(o.address||o.place||"");
+  if(town&&label){
+    const L=label.toLowerCase();
+    const hit=L.includes(town.toLowerCase())||(zip&&L.includes(zip));
+    const legacyExact=!full&&!approx&&/^\d/.test(label);   // old notes were cut short; a house-number match was exact
+    if(!hit&&!legacyExact)out.push(approx?`Only found the town of ${labelPlace(label)}, not ${town}`:`Map put this in ${labelPlace(label)}, not ${town}`);
+  }
+  if(approx&&!out.length)out.push("Only matched the town center, not the street");
+  const others=roster.workers.filter(w=>w!==o&&w.active!==false&&hasLoc(w));
+  if(others.length>=3){const near=Math.min(...others.map(w=>hav(o,w)));if(near>FAR_MI)out.push(`${Math.round(near)} mi from the nearest ${kind==="job"?"worker's home":"other worker"}`)}
+  return out.join(" · ");
+}
+const LOC_FIX="Check it in Google Maps: right-click the spot (long-press on a phone), copy the numbers and paste them into Location.";
+let formGeo=null;   // last "Find from address" result in the open form, so saving keeps its match details
 function hav(a,b){
   const R=3958.8,r=Math.PI/180;
   const dLat=(b.lat-a.lat)*r,dLng=(b.lng-a.lng)*r;
@@ -569,6 +606,7 @@ async function geocodeAddress(addr){
   return null;
 }
 function setGeoStatus(t){document.querySelectorAll(".geoStatus").forEach(e=>{e.textContent=t;e.classList.toggle("hide",!t)})}
+const geoNoteFor=r=>(r.exact?"":"Approx. — matched “"+r.q+"”. ")+"Found: "+(r.label||"").split(",").slice(0,4).join(",");
 async function geocodeMissing(which,onlyId){
   if(geoBusy)return;
   const list=which==="jobs"?tonight.jobs:roster.workers;
@@ -580,7 +618,7 @@ async function geocodeMissing(which,onlyId){
     const o=todo[i];
     try{
       const r=await geocodeAddress(o.address||o.place);
-      if(r){o.lat=r.lat;o.lng=r.lng;o.geoNote=(r.exact?"":"Approx. — matched “"+r.q+"”. ")+"Found: "+(r.label||"").split(",").slice(0,4).join(",");ok++}
+      if(r){o.lat=r.lat;o.lng=r.lng;o.geoNote=geoNoteFor(r);o.geoLabel=String(r.label||"").slice(0,300);ok++}
       else{o.geoNote="Couldn't find this address — tap to fix";fail++;logEvent("geocode-miss",o.address||o.place)}
     }catch(e){offline=true;break}
   }
@@ -588,7 +626,8 @@ async function geocodeMissing(which,onlyId){
   save(which==="jobs"?"tonight":"roster");render();
   if(offline)logEvent("geocode-offline","Address lookup unreachable");
   if(offline)toast("Can't look up addresses here — use the downloaded file version (needs internet), or paste coordinates.");
-  else toast(`${ok} location${ok===1?"":"s"} found${fail?`, ${fail} not found (marked in red)`:""}`);
+  else{const kind=which==="jobs"?"job":"worker";const odd=todo.filter(o=>locWarn(o,kind)).length;
+    toast(`${ok} location${ok===1?"":"s"} found${fail?`, ${fail} not found (marked in red)`:""}${odd?` — ${odd} look${odd===1?"s":""} off, check the orange ones`:""}`)}
 }
 
 /* ---------- workers import ---------- */
@@ -1005,6 +1044,7 @@ const gmapParkRide=(lat,lng)=>`https://www.google.com/maps/search/park+and+ride/
 function jobIssues(j,crew){
   const iss=[];const cs=conflictSet();
   const offS=new Set(tonight.off);
+  {const lw=locWarn(j,"job");if(lw)iss.push(["warn",`Job location looks off: ${lw} — drive times may be wrong`])}
   for(const wid of (j.avoid||[])){if(crew.includes(wid))iss.push(["bad",`${wById(wid)?.name} should not be sent to this job`])}
   for(const wid of (j.requested||[])){const w=wById(wid);if(!w)continue;
     if(offS.has(wid)||w.active===false)iss.push(["bad",`${w.name} was requested but is off today`]);
@@ -1064,9 +1104,11 @@ function rTonight(){
   if(jobs.length){
     h+=`<h3>${jobs.length} job${jobs.length>1?"s":""}${tonight.importedAt?` <span class="muted small">· loaded ${new Date(tonight.importedAt).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"})}</span>`:""}</h3>`;
     const canFind=noLoc.filter(j=>j.address||j.place).length;
+    const oddJ=jobs.filter(j=>locWarn(j,"job"));
+    if(oddJ.length)h+=`<div class="warn">⚠ ${oddJ.length} job location${oddJ.length>1?"s look":" looks"} off (marked below): ${esc(oddJ.map(j=>j.name).join("; ").slice(0,300))}. Drive times and crews for ${oddJ.length>1?"them":"it"} may be wrong — tap ${oddJ.length>1?"each one":"it"} to fix.</div>`;
     if(noLoc.length)h+=`<div class="warn">${noLoc.length} job(s) have no map location yet and will be skipped. ${canFind?`<button class="b small" data-act="findJobs" style="margin-left:6px">Find locations</button>`:"Tap one to fix it."}</div>`;
     if(jobs.some(j=>j.desc||j.title))h+=aiReady()?`<div class="row" style="margin:6px 0"><button class="b small" data-act="aiNotes">🤖 Read job notes with AI</button>${tonight.aiNotesAt?`<span class="small muted">read ${new Date(tonight.aiNotesAt).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}</span>`:""}</div>`:"";
-    h+=`<details ${jobs.length<=8?"open":""}><summary class="small">Job list, trucks &amp; crew sizes</summary><div class="list">`+jobs.map(j=>`<div class="item"><input type="checkbox" data-act="jobOn" data-id="${j.id}" ${j.on?"checked":""} title="Include today"><div class="main" data-act="editJob" data-id="${j.id}" style="cursor:pointer"><div class="t">${j.time?`<span class="tag" style="margin:0 4px 0 0">${esc(j.time)}</span>`:""}${esc(j.name)}</div><div class="s">${(j.requested||[]).length?`<span style="color:var(--accent)">Requested: ${esc(j.requested.map(id=>wById(id)?.name).filter(Boolean).join(", "))}</span><br>`:""}${(j.avoid||[]).length?`<span style="color:var(--bad)">Don't send: ${esc(j.avoid.map(id=>wById(id)?.name).filter(Boolean).join(", "))}</span><br>`:""}${j.aiNote?`<span>🤖 ${esc(j.aiNote)}</span><br>`:""}${esc(j.address||j.folder||"")}${hasLoc(j)?(j.geoNote&&/Approx/.test(j.geoNote)?` <span style="color:var(--warn)">· approx. location</span>`:""):` <span style="color:var(--bad)">· ${j.address||j.place?"location not found":"no location"}</span>`}</div></div><div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end"><label class="small muted">Trucks<input type="number" min="1" max="20" value="${jTrucks(j)}" data-act="jobTrucks" data-id="${j.id}" style="margin-left:4px;width:54px"></label><label class="small muted">Per truck<input type="number" min="1" max="20" value="${jPer(j)}" data-act="jobCrew" data-id="${j.id}" style="margin-left:4px;width:54px" title="People per truck, including the lead"></label></div><button class="x" data-act="delJob" data-id="${j.id}" title="Remove">×</button></div>`).join("")+`</div></details>`;
+    h+=`<details ${jobs.length<=8?"open":""}><summary class="small">Job list, trucks &amp; crew sizes</summary><div class="list">`+jobs.map(j=>`<div class="item"><input type="checkbox" data-act="jobOn" data-id="${j.id}" ${j.on?"checked":""} title="Include today"><div class="main" data-act="editJob" data-id="${j.id}" style="cursor:pointer"><div class="t">${j.time?`<span class="tag" style="margin:0 4px 0 0">${esc(j.time)}</span>`:""}${esc(j.name)}</div><div class="s">${(j.requested||[]).length?`<span style="color:var(--accent)">Requested: ${esc(j.requested.map(id=>wById(id)?.name).filter(Boolean).join(", "))}</span><br>`:""}${(j.avoid||[]).length?`<span style="color:var(--bad)">Don't send: ${esc(j.avoid.map(id=>wById(id)?.name).filter(Boolean).join(", "))}</span><br>`:""}${j.aiNote?`<span>🤖 ${esc(j.aiNote)}</span><br>`:""}${esc(j.address||j.folder||"")}${hasLoc(j)?((locWarn(j,"job")?`<br><span style="color:var(--warn)">⚠ ${esc(locWarn(j,"job"))} — tap to fix</span>`:"")):` <span style="color:var(--bad)">· ${j.address||j.place?"location not found":"no location"}</span>`}</div></div><div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end"><label class="small muted">Trucks<input type="number" min="1" max="20" value="${jTrucks(j)}" data-act="jobTrucks" data-id="${j.id}" style="margin-left:4px;width:54px"></label><label class="small muted">Per truck<input type="number" min="1" max="20" value="${jPer(j)}" data-act="jobCrew" data-id="${j.id}" style="margin-left:4px;width:54px" title="People per truck, including the lead"></label></div><button class="x" data-act="delJob" data-id="${j.id}" title="Remove">×</button></div>`).join("")+`</div></details>`;
   }
   h+=`</div>`;
   // step 2
@@ -1104,6 +1146,7 @@ function jobForm(){
   <div class="row" style="margin-top:6px"><button class="b small" data-act="findJobForm">Find from address</button></div>
   <label class="f">Location — found automatically, or paste coordinates / a Google Maps link</label><input type="text" id="jfLoc" value="${esc(loc)}" placeholder="35.0527, -78.8784">
   ${j.geoNote?`<div class="small ${hasLoc(j)?"muted":""}" style="margin-top:3px;${hasLoc(j)?"":"color:var(--bad)"}">${esc(j.geoNote)}</div>`:""}
+  <div id="jfWarn" class="small ${locWarn(j,"job")?"":"hide"}" style="margin-top:3px;color:var(--warn)">${locWarn(j,"job")?`⚠ ${esc(locWarn(j,"job"))}. ${esc(LOC_FIX)}`:""}</div>
   ${j.title?`<div class="small muted" style="margin-top:6px">Calendar title: ${esc(j.title)}</div>`:""}
   <label class="f">Requested crew leads &amp; workers <span class="muted">(tap to add or remove)</span></label>
   <div class="chips" id="jfReq">${[...roster.workers].filter(w=>w.active!==false).sort((a,b)=>(b.lead-a.lead)||a.name.localeCompare(b.name)).map(w=>`<button type="button" class="chip ${(j.requested||[]).includes(w.id)?"":"off"}" style="${(j.requested||[]).includes(w.id)?"background:var(--accent);color:var(--accent-ink);border-color:var(--accent)":"text-decoration:none"}" data-act="reqToggle" data-id="${w.id}">${w.lead?"★ ":""}${esc(w.name)}</button>`).join("")||`<span class="small muted">Add workers first.</span>`}</div>
@@ -1256,7 +1299,7 @@ function rWorkers(){
     const sorted=[...ws].sort((a,b)=>a.name.localeCompare(b.name));
     h+=`<div class="list">`+sorted.map(w=>{
       const nc=roster.conflicts.filter(p=>p.includes(w.id)).length;
-      return `<div class="item" style="${w.active===false?"opacity:.55":""}"><div class="main" data-act="editWorker" data-id="${w.id}" style="cursor:pointer"><div class="t">${esc(w.name)}${w.lead?`<span class="tag lead">lead${leadLimit(w)?" · "+leadLimit(w)+" mi":""}</span>`:""}${w.active===false?`<span class="tag">inactive</span>`:""}</div><div class="s">${esc(w.address||"")}${hasLoc(w)?"":` <span style="color:var(--bad)">· needs location</span>`}${nc?` · ${nc} can't-work-with`:""}</div></div><button class="b small" data-act="editWorker" data-id="${w.id}">Edit</button></div>`}).join("")+`</div>`;
+      return `<div class="item" style="${w.active===false?"opacity:.55":""}"><div class="main" data-act="editWorker" data-id="${w.id}" style="cursor:pointer"><div class="t">${esc(w.name)}${w.lead?`<span class="tag lead">lead${leadLimit(w)?" · "+leadLimit(w)+" mi":""}</span>`:""}${w.active===false?`<span class="tag">inactive</span>`:""}</div><div class="s">${esc(w.address||"")}${hasLoc(w)?(locWarn(w,"worker")?`<br><span style="color:var(--warn)">⚠ ${esc(locWarn(w,"worker"))}</span>`:""):` <span style="color:var(--bad)">· needs location</span>`}${nc?` · ${nc} can't-work-with`:""}</div></div><button class="b small" data-act="editWorker" data-id="${w.id}">Edit</button></div>`}).join("")+`</div>`;
   }
   h+=`</div>`;
   h+=`<div class="card"><h2>Back up &amp; move to another device</h2>
@@ -1275,6 +1318,7 @@ function workerForm(){
   <div class="row" style="margin-top:6px"><button class="b small" data-act="findWorkerForm">Find from address</button><a href="#" class="small" data-act="openAddr">Check in Google Maps</a></div>
   <label class="f">Home location — found automatically, or paste coordinates / a Google Maps link</label><input type="text" id="wfLoc" value="${esc(loc)}" placeholder="35.0527, -78.8784">
   ${w.geoNote?`<div class="small muted" style="margin-top:3px">${esc(w.geoNote)}</div>`:""}
+  <div id="wfWarn" class="small ${locWarn(w,"worker")?"":"hide"}" style="margin-top:3px;color:var(--warn)">${locWarn(w,"worker")?`⚠ ${esc(locWarn(w,"worker"))}.`:""}</div>
   <div class="small muted" style="margin-top:3px">If the lookup is off, long-press the house in Google Maps (phone) or right-click it (computer), copy the numbers and paste them here.</div>
   <label class="f">Phone (optional)</label><input type="tel" id="wfPhone" value="${esc(w.phone)}">
   <label class="f">Max distance to jobs, miles — crew leads only <span class="muted">(blank = use default${S().maxLeadMiles?" of "+S().maxLeadMiles+" mi":""})</span></label><input type="number" id="wfMax" min="0" max="500" value="${w.maxMiles||""}" placeholder="${S().maxLeadMiles||"no limit"}" style="width:110px">
@@ -1941,7 +1985,7 @@ function readBackup(text){
   if(!r||!Array.isArray(r.workers))throw new Error("That isn't a Crew Scheduler backup.");
   const clean=w=>({id:String(w.id||uid()),name:String(w.name||"Unnamed").slice(0,80),address:String(w.address||"").slice(0,200),
     lat:typeof w.lat==="number"&&Math.abs(w.lat)<=90?w.lat:null,lng:typeof w.lng==="number"&&Math.abs(w.lng)<=180?w.lng:null,
-    phone:String(w.phone||"").slice(0,40),lead:!!w.lead,active:w.active!==false,maxMiles:+w.maxMiles>0?+w.maxMiles:0,geoNote:w.geoNote?String(w.geoNote).slice(0,200):""});
+    phone:String(w.phone||"").slice(0,40),lead:!!w.lead,active:w.active!==false,maxMiles:+w.maxMiles>0?+w.maxMiles:0,geoNote:w.geoNote?String(w.geoNote).slice(0,200):"",geoLabel:w.geoLabel?String(w.geoLabel).slice(0,300):""});
   const pairs=a=>Array.isArray(a)?a.filter(p=>Array.isArray(p)&&p.length===2).map(p=>[String(p[0]),String(p[1])]):[];
   return {workers:r.workers.map(clean),conflicts:pairs(r.conflicts),prefers:pairs(r.prefers),settings:r.settings&&typeof r.settings==="object"?r.settings:null,historyDays:d.history&&Array.isArray(d.history.days)?d.history.days:[]};
 }
@@ -2025,17 +2069,21 @@ document.addEventListener("click",async e=>{
       const t=$("#pasteTxt").value.trim();if(!t)return;
       try{const k=detectKind(t);rawImportText=t;let p=placesFrom(k,t);p=p.filter(x=>x.name);if(!p.length)throw new Error("No jobs found in that text.");await importPlaces(k,p,"paste")}catch(err){toast(err.message)}
       break;}
-    case "addJob":editingJob="new";render();break;
+    case "addJob":editingJob="new";formGeo=null;render();break;
     case "reqToggle":{const on=el.classList.toggle("off");el.style.cssText=on?"text-decoration:none":"background:var(--accent);color:var(--accent-ink);border-color:var(--accent)";break;}
     case "findJobs":geocodeMissing("jobs");break;
     case "findWorkers":geocodeMissing("workers");break;
     case "findJobForm":case "findWorkerForm":{
       const isJ=a==="findJobForm";const ad=$(isJ?"#jfAddr":"#wfAddr").value.trim();if(!ad){toast("Type the address first");return}
       el.disabled=true;el.textContent="Looking…";
-      try{const r=await geocodeAddress(ad);if(r){$(isJ?"#jfLoc":"#wfLoc").value=r.lat.toFixed(6)+", "+r.lng.toFixed(6);toast((r.exact?"Found: ":"Approx. match: ")+(r.label||"").split(",").slice(0,3).join(","))}else toast("Couldn't find that address — try adding the town and state")}
+      try{const r=await geocodeAddress(ad);if(r){$(isJ?"#jfLoc":"#wfLoc").value=r.lat.toFixed(6)+", "+r.lng.toFixed(6);
+        formGeo={lat:r.lat,lng:r.lng,geoNote:geoNoteFor(r),geoLabel:String(r.label||"").slice(0,300)};
+        const wn=locWarn({lat:r.lat,lng:r.lng,address:ad,geoNote:formGeo.geoNote,geoLabel:formGeo.geoLabel},isJ?"job":"worker");
+        const box=$(isJ?"#jfWarn":"#wfWarn");if(box){box.innerHTML=wn?`⚠ ${esc(wn)}. ${esc(LOC_FIX)}`:"";box.classList.toggle("hide",!wn)}
+        toast(wn?"⚠ "+wn:(r.exact?"Found: ":"Approx. match: ")+(r.label||"").split(",").slice(0,3).join(","))}else toast("Couldn't find that address — try adding the town and state")}
       catch(e){toast("Can't look up addresses here — use the downloaded file version, or paste coordinates.")}
       el.disabled=false;el.textContent="Find from address";break;}
-    case "editJob":editingJob=id;render();setTimeout(()=>$("#jfName")?.scrollIntoView({block:"center"}),0);break;
+    case "editJob":editingJob=id;formGeo=null;render();setTimeout(()=>$("#jfName")?.scrollIntoView({block:"center"}),0);break;
     case "cancelJob":editingJob=null;render();break;
     case "saveJob":{
       const name=$("#jfName").value.trim()||"Job";const c=parseCoords($("#jfLoc").value);
@@ -2044,8 +2092,9 @@ document.addEventListener("click",async e=>{
       const time=$("#jfTime").value.trim();const addr=$("#jfAddr").value.trim();
       const requested=[...document.querySelectorAll("#jfReq .chip")].filter(c=>!c.classList.contains("off")).map(c=>c.dataset.id);
       let jid=editingJob;
-      if(editingJob==="new"){jid=uid();tonight.jobs.push({id:jid,name,time,address:addr,lat:c?c.lat:null,lng:c?c.lng:null,desc:"",folder:"",crew,trucks,requested,on:true})}
-      else{const j=jById(editingJob);const moved=!c||!hasLoc(j)||Math.abs(c.lat-j.lat)>1e-6||Math.abs(c.lng-j.lng)>1e-6;Object.assign(j,{name,time,address:addr,lat:c?c.lat:null,lng:c?c.lng:null,crew,trucks,requested});if(moved)j.geoNote=c?"Set by hand":""}
+      const fg=c&&formGeo&&Math.abs(c.lat-formGeo.lat)<1e-5&&Math.abs(c.lng-formGeo.lng)<1e-5?formGeo:null;formGeo=null;
+      if(editingJob==="new"){jid=uid();tonight.jobs.push({id:jid,name,time,address:addr,lat:c?c.lat:null,lng:c?c.lng:null,geoNote:fg?fg.geoNote:(c?"Set by hand":""),geoLabel:fg?fg.geoLabel:"",desc:"",folder:"",crew,trucks,requested,on:true})}
+      else{const j=jById(editingJob);const moved=!c||!hasLoc(j)||Math.abs(c.lat-j.lat)>1e-6||Math.abs(c.lng-j.lng)>1e-6;Object.assign(j,{name,time,address:addr,lat:c?c.lat:null,lng:c?c.lng:null,crew,trucks,requested});if(fg){j.geoNote=fg.geoNote;j.geoLabel=fg.geoLabel}else if(moved){j.geoNote=c?"Set by hand":"";j.geoLabel=""}}
       editingJob=null;save("tonight");render();
       if(!c&&addr)geocodeMissing("jobs",jid);
       break;}
@@ -2100,8 +2149,8 @@ document.addEventListener("click",async e=>{
     case "spot":pickSpot(el.dataset.w,el.dataset.j);break;
     case "lock":{const w=el.dataset.w,j=el.dataset.j;if(tonight.locks[w]===j)delete tonight.locks[w];else tonight.locks[w]=j;save("tonight");render();break;}
     case "unassign":{const w=el.dataset.w,j=el.dataset.j;tonight.assign[j]=tonight.assign[j].filter(x=>x!==w);delete tonight.locks[w];save("tonight");render();break;}
-    case "addWorker":editingWorker="new";render();setTimeout(()=>$("#wfName")?.focus(),0);break;
-    case "editWorker":editingWorker=id;render();setTimeout(()=>$("#wfName")?.scrollIntoView({block:"center"}),0);break;
+    case "addWorker":editingWorker="new";formGeo=null;render();setTimeout(()=>$("#wfName")?.focus(),0);break;
+    case "editWorker":editingWorker=id;formGeo=null;render();setTimeout(()=>$("#wfName")?.scrollIntoView({block:"center"}),0);break;
     case "cancelWorker":editingWorker=null;render();break;
     case "openAddr":{const ad=$("#wfAddr").value.trim();if(!ad){toast("Type the address first");return}
       const url="https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(ad);
@@ -2112,7 +2161,9 @@ document.addEventListener("click",async e=>{
       if(lt&&!c){toast("Couldn't read that location — paste like 40.01, -82.98");return}
       const data={name,address:$("#wfAddr").value.trim(),lat:c?c.lat:null,lng:c?c.lng:null,phone:$("#wfPhone").value.trim(),lead:$("#wfLead").checked,active:$("#wfActive").checked,maxMiles:Math.max(0,parseFloat($("#wfMax").value)||0)};
       let wid=editingWorker;
-      if(editingWorker==="new"){wid=uid();roster.workers.push({id:wid,...data})}else{const ow=wById(editingWorker);if(c&&hasLoc(ow)&&(Math.abs(c.lat-ow.lat)>1e-6||Math.abs(c.lng-ow.lng)>1e-6))data.geoNote="Set by hand";Object.assign(ow,data)}
+      const fg=c&&formGeo&&Math.abs(c.lat-formGeo.lat)<1e-5&&Math.abs(c.lng-formGeo.lng)<1e-5?formGeo:null;formGeo=null;
+      if(fg){data.geoNote=fg.geoNote;data.geoLabel=fg.geoLabel}
+      if(editingWorker==="new"){wid=uid();roster.workers.push({id:wid,...data})}else{const ow=wById(editingWorker);if(!fg&&c&&hasLoc(ow)&&(Math.abs(c.lat-ow.lat)>1e-6||Math.abs(c.lng-ow.lng)>1e-6)){data.geoNote="Set by hand";data.geoLabel=""}Object.assign(ow,data)}
       editingWorker=null;save("roster");render();
       if(!c&&data.address)geocodeMissing("workers",wid);
       break;}
