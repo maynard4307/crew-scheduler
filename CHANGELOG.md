@@ -2,6 +2,11 @@
 
 Tap the version number at the top of the app to see this inside Crew Scheduler.
 
+## 2026.11.09-c — Nov 9, 2026
+
+**New**
+- “Download this app” button (How to tab and Crew rules) on the website version: saves a copy you can open on a computer without internet setup, named with its version number.
+
 ## 2026.11.09-b — Nov 9, 2026
 
 **New**

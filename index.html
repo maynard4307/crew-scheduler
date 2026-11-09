@@ -98,9 +98,10 @@ code{background:var(--chip);padding:1px 5px;border-radius:5px;font-size:13px;ove
 <script>
 "use strict";
 /* ---------- state ---------- */
-const APP_VERSION="2026.11.09-b";
+const APP_VERSION="2026.11.09-c";
 /* Release notes — newest first. Add an entry here with every update. */
 const CHANGELOG=[
+ {v:"2026.11.09-c",date:"Nov 9, 2026",added:["“Download this app” button (How to tab and Crew rules) on the website version: saves a copy you can open on a computer without internet setup, named with its version number."]},
  {v:"2026.11.09-b",date:"Nov 9, 2026",added:["What's new: tap the version number at the top to see what changed. It also pops up once after each update."]},
  {v:"2026.11.09-a",date:"Nov 9, 2026",added:["Version number shown in the top bar on every screen.","Separate delete choices in Crew rules → Delete data: today's crews, today's jobs & crews, all workers & crew rules, or everything.","“Delete all workers…” on the Workers tab, with a “Save backup first” option."]},
  {v:"2026.11.08-ai1",date:"Nov 8, 2026",added:["AI assistant (optional, needs a Claude API key): “Read job notes with AI” pulls trucks, crew size, requested and “don't send” people and key notes from calendar text.","“Review with AI” checks the built crews, takes today's special instructions, and suggests fixes you can apply with one tap.","“Don't send” list per job — those people are never put on that job."],fixed:["Calendar notes are now kept in full (up to 1,500 characters) so nothing important is cut off."]},
@@ -1082,6 +1083,7 @@ function rRulesInner(){
   <label class="row small" style="margin-bottom:6px"><input type="checkbox" data-set="allowStores" ${s.allowStores?"checked":""}> Meet spot search: include store &amp; gas station lots (Walmart, Food Lion…)</label>
   <label class="row small"><input type="checkbox" data-set="leadsAsHelpers" ${s.leadsAsHelpers?"checked":""}> If there are spare leads, let them fill worker spots (their truck stays parked)</label>
   <h3>Backup</h3><div class="row"><button class="b" data-act="saveRoster">Save backup file</button><button class="b" data-act="restoreRoster">Restore backup</button></div>
+  ${canDownloadApp()?`<h3>Use on a computer</h3><p class="small muted" style="margin-top:0">Save a copy of this app to open on a computer.</p>${rDownloadApp("rules")}`:""}
   <h3>Delete data</h3><p class="small muted" style="margin-top:0">Pick only what you want to clear. Save a backup first if you might want it back.</p>
   <div class="list">
     <div class="item"><div class="main"><div class="t">Today's crews</div><div class="s">Clears the crews, locks, meet spots and AI review. Keeps today's jobs, workers and rules.</div></div><button class="b small" data-act="delCrews" ${tonight.assign?"":"disabled"}>Clear</button></div>
@@ -1106,6 +1108,7 @@ function rHelp(){
   <div class="card"><h2>Workers' home locations (one time)</h2>
   <p class="small">Add each worker with their home address and tap <b>Find from address</b>. It looks the address up on OpenStreetMap, which needs an internet connection. To add many at once, use <b>Import list</b> with a CSV that has the columns <code>Name, Address, Phone, Lead</code>; their locations are looked up automatically.</p>
   <p class="small">If a lookup lands in the wrong spot, long-press the house in Google Maps (phone) or right-click it (computer), copy the two numbers, and paste them into the worker's location box.</p></div>
+  ${rDownloadApp("help")}
   <div class="card" id="relCard" style="order:99"><h2>What's new — release history</h2><p class="small muted" style="margin:0">Tap the version number at the top of any screen to see the latest changes.</p>${relHTML(CHANGELOG)}</div>
   <div class="card"><h2>🤖 AI assistant (optional)</h2><p class="small">With a Claude API key saved under <b>Crew rules → AI assistant</b>: <b>Read job notes with AI</b> pulls trucks, crew size, requested and “don't send” people and important notes out of messy calendar text. After building crews, <b>Review with AI</b> looks for problems and better swaps — type anything special for today (who has to leave early, who to keep off a job) and it takes that into account. Each suggestion has an <b>Apply</b> button; applied people are locked 🔒 so a rebuild keeps them. Only names, jobs, distances and rules are sent — never addresses or phone numbers.</p></div>
   <div class="card"><h2>Having a problem?</h2><p class="small">Go to <b>Crew rules → Pack &amp; save for support</b>. It saves one .zip file with all workers, crew rules, today's jobs, the last calendar import, the crews and a log of recent errors. Send that file along with a note of what went wrong. It contains names, addresses and phone numbers, so only send it to someone you trust.</p></div>
@@ -1345,6 +1348,28 @@ function rAISettings(){
   <div class="row" style="margin-top:10px"><button class="b p" data-act="aiSave">Save</button><button class="b" data-act="aiTest" ${c.key?"":"disabled"}>Test</button>${c.key?`<button class="b" data-act="aiRemove" style="color:var(--bad)">Remove key</button>`:""}</div>
   <p class="small muted" style="margin-bottom:0">AI sends worker names, lead status, job titles/notes, distances and crew rules to Anthropic. Home addresses, phone numbers and map locations are never sent. AI features work on the website version (not on the shared Claude page).</p></div>`;
 }
+/* ---------- download a copy of the app ---------- */
+const canDownloadApp=()=>/^https?:$/.test(location.protocol)&&!(window.claude&&window.claude.use)&&!/claude\.ai|claudeusercontent/.test(location.host);
+async function downloadApp(){
+  const name=`crew-scheduler-v${APP_VERSION}.html`;
+  let html;
+  try{
+    const r=await fetch(location.pathname.endsWith("/")?location.pathname+"index.html":location.pathname,{cache:"no-store"});
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    html=await r.text();
+    if(!/Crew Scheduler/.test(html))throw new Error("unexpected file");
+  }catch(e){logEvent("error","Download app failed: "+e.message);toast("Couldn't download the app right now. Check the internet and try again.");return}
+  await download(name,new Blob([html],{type:"text/html"}));
+  logEvent("download-app",name);
+}
+function rDownloadApp(where){
+  if(!canDownloadApp())return "";
+  return where==="help"
+    ?`<div class="card"><h2>💾 Download this app</h2><p class="small">Save a copy of Crew Scheduler (version <span style="white-space:nowrap">${esc(APP_VERSION)}</span>) to a computer and open it in Chrome, Edge or Firefox. It works the same, including address lookup and AI, as long as there's internet.</p>
+      <p class="small muted">The copy keeps its own workers and jobs, separate from this website. To bring your workers over, use <b>Workers → Save backup file</b> here, then <b>Restore backup</b> in the copy. On an iPhone, use the website instead — iPhones can't run downloaded app files.</p>
+      <button class="b p" data-act="downloadApp">💾 Download app</button> <span class="small muted" style="white-space:nowrap">saves crew-scheduler-v${esc(APP_VERSION)}.html</span></div>`
+    :`<div class="row" style="margin-top:8px"><button class="b" data-act="downloadApp">💾 Download this app (v${esc(APP_VERSION)})</button></div>`;
+}
 /* ---------- what's new ---------- */
 function relHTML(list){
   return `<div class="rel">`+list.map(r=>`<h3>${esc(r.v)}${r.v===APP_VERSION?` <span class="tag lead">this version</span>`:""} <span class="small muted" style="font-weight:400">· ${esc(r.date)}</span></h3>
@@ -1579,6 +1604,7 @@ document.addEventListener("click",async e=>{
       const other=k==="c"?roster.prefers:roster.conflicts;const oi=other.findIndex(p=>pairKey(p[0],p[1])===pairKey(A,B));if(oi>=0)other.splice(oi,1);
       arr.push([A,B]);save("roster");render();break;}
     case "delPair":{const arr=el.dataset.k==="c"?roster.conflicts:roster.prefers;arr.splice(+el.dataset.i,1);save("roster");render();break;}
+    case "downloadApp":{el.disabled=true;const tx=el.textContent;el.textContent="Downloading…";try{await downloadApp()}finally{el.disabled=false;el.textContent=tx}break;}
     case "whatsNew":showWhatsNew(null);break;
     case "goAI":tab="rules";render();setTimeout(()=>$("#aiCard")?.scrollIntoView({block:"start"}),0);break;
     case "aiSave":{const c=aiCfg();const k=$("#aiKey").value.trim();if(k)c.key=k;c.model=$("#aiModel").value;c.autoNotes=$("#aiAuto").checked;
