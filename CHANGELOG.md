@@ -2,6 +2,15 @@
 
 Tap the version number at the top of the app to see this inside Crew Scheduler.
 
+## 2026.11.09-d — Nov 9, 2026
+
+**New**
+- New History tab: every day's schedule is saved when you copy or send it — who was on each truck, for which job.
+- Close out each job the next morning: Completed, Rained out or Cancelled, with a note and crew changes (sent home, no-show, swapped in).
+- Month calendar with colored dots, a search box (person, client or town) and spreadsheet export for any date range.
+- On a PC (Chrome or Edge): connect a history file once and it's kept up to date automatically.
+- History is included in backups and kept forever.
+
 ## 2026.11.09-c — Nov 9, 2026
 
 **New**

@@ -22,11 +22,23 @@ header{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px 
 h1{font-size:18px;margin:0}
 .ver{font:inherit;font-size:11px;font-weight:500;color:var(--accent);margin-left:4px;white-space:nowrap;background:none;border:1px solid var(--line);border-radius:999px;padding:2px 8px;cursor:pointer;vertical-align:2px}
 .ver.new::after{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--bad);margin-left:5px;vertical-align:1px}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:8px}
+.cal .dow{font-size:11px;color:var(--muted);text-align:center;font-weight:600}
+.cal .d{min-height:46px;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:3px 4px;font:inherit;font-size:12px;text-align:left;color:var(--ink);cursor:pointer;display:flex;flex-direction:column;gap:2px}
+.cal .d.empty{background:transparent;border-color:transparent;cursor:default}
+.cal .d.today{border-color:var(--accent)}
+.cal .d.sel{outline:2px solid var(--accent);outline-offset:-1px}
+.cal .dots{display:flex;flex-wrap:wrap;gap:2px}
+.cal .dot{width:7px;height:7px;border-radius:50%}
+.st-done{background:#16a34a}.st-rain{background:#2563eb}.st-cancel{background:#9ca3af}.st-open{background:#f59e0b}
+.stbtn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:5px 10px;font:inherit;font-size:13px;cursor:pointer}
+.stbtn.on.done{background:#16a34a;color:#fff;border-color:#16a34a}.stbtn.on.rain{background:#2563eb;color:#fff;border-color:#2563eb}.stbtn.on.cancel{background:#6b7280;color:#fff;border-color:#6b7280}
 .rel h3{margin:14px 0 2px;font-size:15px}.rel ul{margin:4px 0 0;padding-left:20px}.rel li{margin:3px 0;font-size:14px}
 .rel .lbl{font-size:12px;font-weight:700;margin-top:6px}
 #saveState{font-size:12px;color:var(--muted)}
 nav{display:flex;gap:2px;padding:0 8px;max-width:980px;margin:0 auto;overflow-x:auto}
 nav button{flex:1;min-width:max-content;background:none;border:0;border-bottom:3px solid transparent;padding:10px 12px;font:inherit;color:var(--muted);cursor:pointer}
+@media (max-width:480px){nav{padding:0 2px;gap:0}nav button{padding:10px 7px;font-size:14px}}
 nav button.on{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
 main{max-width:980px;margin:0 auto;padding:14px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:14px}
@@ -88,6 +100,7 @@ code{background:var(--chip);padding:1px 5px;border-radius:5px;font-size:13px;ove
     <button data-tab="tonight" class="on">Today</button>
     <button data-tab="workers">Workers</button>
     <button data-tab="rules">Crew rules</button>
+    <button data-tab="history">History<span id="histDot" class="hide" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--warn);margin-left:5px;vertical-align:2px"></span></button>
     <button data-tab="help">How to</button>
   </nav>
 </header>
@@ -98,9 +111,10 @@ code{background:var(--chip);padding:1px 5px;border-radius:5px;font-size:13px;ove
 <script>
 "use strict";
 /* ---------- state ---------- */
-const APP_VERSION="2026.11.09-c";
+const APP_VERSION="2026.11.09-d";
 /* Release notes — newest first. Add an entry here with every update. */
 const CHANGELOG=[
+ {v:"2026.11.09-d",date:"Nov 9, 2026",added:["New History tab: every day's schedule is saved when you copy or send it — who was on each truck, for which job.","Close out each job the next morning: Completed, Rained out or Cancelled, with a note and crew changes (sent home, no-show, swapped in).","Month calendar with colored dots, a search box (person, client or town) and spreadsheet export for any date range.","On a PC (Chrome or Edge): connect a history file once and it's kept up to date automatically.","History is included in backups and kept forever."]},
  {v:"2026.11.09-c",date:"Nov 9, 2026",added:["“Download this app” button (How to tab and Crew rules) on the website version: saves a copy you can open on a computer without internet setup, named with its version number."]},
  {v:"2026.11.09-b",date:"Nov 9, 2026",added:["What's new: tap the version number at the top to see what changed. It also pops up once after each update."]},
  {v:"2026.11.09-a",date:"Nov 9, 2026",added:["Version number shown in the top bar on every screen.","Separate delete choices in Crew rules → Delete data: today's crews, today's jobs & crews, all workers & crew rules, or everything.","“Delete all workers…” on the Workers tab, with a “Save backup first” option."]},
@@ -838,12 +852,15 @@ function colorFor(i){return PALETTE[i%PALETTE.length]}
 function render(){
   document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.tab===tab));
   const el=$("#app");
-  el.innerHTML=tab==="tonight"?rTonight():tab==="workers"?rWorkers():tab==="rules"?rRules():rHelp();
+  el.innerHTML=tab==="tonight"?rTonight():tab==="workers"?rWorkers():tab==="rules"?rRules():tab==="history"?rHistory():rHelp();
+  const od=openCloseouts();$("#histDot")?.classList.toggle("hide",!od.length);
 }
 function rTonight(){
   const jobs=tonight.jobs;const noLoc=jobs.filter(j=>!hasLoc(j));
   const empty=!jobs.length&&!roster.workers.length;
   let h="";
+  const odT=openCloseouts();
+  if(odT.length){const o=odT[odT.length-1];h+=`<div class="card" style="border-color:var(--warn);background:var(--warn-bg)"><div class="row" style="justify-content:space-between"><span><b>Close out ${esc(dLabel(o.date,{weekday:"long",month:"short",day:"numeric"}))}</b> — ${o.n} job${o.n>1?"s":""} still need a status${odT.length>1?` (+${odT.length-1} earlier day${odT.length>2?"s":""})`:""}.</span><button class="b small p" data-act="histOpen" data-d="${o.date}">Close out</button></div></div>`}
   if(empty)h+=`<div class="card"><h2>Welcome</h2><p class="muted small">Start by adding your workers (with home locations) on the <b>Workers</b> tab, then load today's jobs here. Want to see how it works first?</p><button class="b" data-act="sample">Try it with sample data</button></div>`;
   // step 1
   h+=`<div class="card"><h2><span class="step">1</span>Load today's jobs</h2>
@@ -879,7 +896,8 @@ function rTonight(){
   const ready=jobs.some(j=>j.on&&hasLoc(j))&&act.some(w=>!off.has(w.id)&&hasLoc(w));
   h+=`<div class="card"><h2><span class="step">3</span>Build crews</h2>
   <p class="muted small">Matches the closest available people to each job, keeps people who can't work together apart, and fills every crew it can. Every truck gets one crew lead (★), then workers. Tap 🔒 to keep someone on a job when you rebuild.</p>
-  <div class="row"><button class="b p" data-act="solve" ${ready?"":"disabled"}>${tonight.assign?"Rebuild crews":"Build crews"}</button>${tonight.assign?`<button class="b" data-act="copy">Copy schedule</button><button class="b" data-act="csv">Download CSV</button><button class="b" data-act="clearAsg">Clear</button>`:""}</div>`;
+  <div class="row"><button class="b p" data-act="solve" ${ready?"":"disabled"}>${tonight.assign?"Rebuild crews":"Build crews"}</button>${tonight.assign?`<button class="b" data-act="saveHist">${histUnsaved()?"💾 Save to History":"✓ Saved to History"}</button><button class="b" data-act="copy">Copy schedule</button><button class="b" data-act="csv">Download CSV</button><button class="b" data-act="clearAsg">Clear</button>`:""}</div>`;
+  if(tonight.assign&&histUnsaved()&&tonight.histSaved&&tonight.histSaved.date===scheduleDay())h+=`<div class="warn" style="margin-top:8px">Crews changed since this day was saved to History. Copy the schedule again (or tap Save to History) to update the record.</div>`;
   if(tonight.assign)h+=rResults()+rAIReview();
   h+=`</div>`;
   return h;
@@ -1042,7 +1060,7 @@ function rWorkers(){
   }
   h+=`</div>`;
   h+=`<div class="card"><h2>Back up &amp; move to another device</h2>
-  <p class="muted small">Saves every crew lead and worker (names, addresses, locations, phones, lead status), the can't-work-together and work-well-together lists, and your settings. Restore it on another phone or computer, or into a newer version of this tool.</p>
+  <p class="muted small">Saves every crew lead and worker (names, addresses, locations, phones, lead status), the can't-work-together and work-well-together lists, your settings, and all History. Restore it on another phone or computer, or into a newer version of this tool.</p>
   <div class="row"><button class="b p" data-act="saveRoster" ${roster.workers.length?"":"disabled"}>Save backup file</button><button class="b" data-act="copyRoster" ${roster.workers.length?"":"disabled"}>Copy backup text</button><button class="b" data-act="restoreRoster">Restore backup</button></div>
   <div class="row" style="margin-top:8px"><button class="b small" data-act="workersCsv" ${roster.workers.length?"":"disabled"}>Export workers as spreadsheet (CSV)</button>${roster.workers.length?`<button class="b small" data-act="delWorkers" style="color:var(--bad)">Delete all workers…</button>`:""}</div>
   ${roster.workers.length?`<p class="small muted" style="margin-bottom:0">Tip: save a backup whenever you add or change workers. Email it to yourself or keep it in Google Drive so it's never lost.</p>`:""}</div>`;
@@ -1089,7 +1107,8 @@ function rRulesInner(){
     <div class="item"><div class="main"><div class="t">Today's crews</div><div class="s">Clears the crews, locks, meet spots and AI review. Keeps today's jobs, workers and rules.</div></div><button class="b small" data-act="delCrews" ${tonight.assign?"":"disabled"}>Clear</button></div>
     <div class="item"><div class="main"><div class="t">Today's jobs &amp; crews</div><div class="s">Same as “Start new day”: clears jobs, crews and who's off. Keeps workers and rules.</div></div><button class="b small" data-act="delDay" ${tonight.jobs.length?"":"disabled"}>Clear</button></div>
     <div class="item"><div class="main"><div class="t">All workers &amp; crew rules</div><div class="s">Deletes every crew lead and worker, and the can't-work-together / work-well-together lists. Keeps settings and today's jobs.</div></div><button class="b small" data-act="delWorkers" style="color:var(--bad)" ${roster.workers.length?"":"disabled"}>Delete</button></div>
-    <div class="item"><div class="main"><div class="t">Everything</div><div class="s">Workers, rules, settings, jobs and crews. The AI key stays (remove it in AI assistant).</div></div><button class="b small" data-act="wipe" style="color:var(--bad)">Delete</button></div>
+    <div class="item"><div class="main"><div class="t">History</div><div class="s">Every saved day and close-out. Workers, rules and today stay. A connected history file on a PC is emptied too.</div></div><button class="b small" data-act="delHistory" style="color:var(--bad)" ${HIST.size?"":"disabled"}>Delete</button></div>
+    <div class="item"><div class="main"><div class="t">Everything</div><div class="s">Workers, rules, settings, jobs, crews and history. The AI key stays (remove it in AI assistant).</div></div><button class="b small" data-act="wipe" style="color:var(--bad)">Delete</button></div>
   </div>
   <h3>Having a problem?</h3><p class="small muted" style="margin-top:0">Packs every worker, crew rule, today's jobs, the last calendar import, the crews and a log of recent errors into one .zip file you can send for help.</p>
   <div class="row"><button class="b p" data-act="supportPack">Pack &amp; save for support</button></div>
@@ -1108,6 +1127,9 @@ function rHelp(){
   <div class="card"><h2>Workers' home locations (one time)</h2>
   <p class="small">Add each worker with their home address and tap <b>Find from address</b>. It looks the address up on OpenStreetMap, which needs an internet connection. To add many at once, use <b>Import list</b> with a CSV that has the columns <code>Name, Address, Phone, Lead</code>; their locations are looked up automatically.</p>
   <p class="small">If a lookup lands in the wrong spot, long-press the house in Google Maps (phone) or right-click it (computer), copy the two numbers, and paste them into the worker's location box.</p></div>
+  <div class="card"><h2>📅 History &amp; close-out</h2><p class="small">Each day is saved to <b>History</b> when you tap <b>Copy schedule</b> (or <b>Save to History</b>). If you change crews and copy again, the record updates and the change log shows what moved.</p>
+  <p class="small"><b>Next morning:</b> open the day (the app reminds you) and mark each job ✅ Completed, 🌧 Rained out or ❌ Cancelled. Add a note or a crew change — sent home early, no-show, swapped in — so the record shows who actually worked.</p>
+  <p class="small"><b>Looking something up:</b> use the calendar, or type a name, client or town in Search. Export any date range as a spreadsheet. On a PC in Chrome or Edge, <b>Connect a history file</b> once and it's updated automatically. History is kept forever and included in <b>Save backup file</b>.</p></div>
   ${rDownloadApp("help")}
   <div class="card" id="relCard" style="order:99"><h2>What's new — release history</h2><p class="small muted" style="margin:0">Tap the version number at the top of any screen to see the latest changes.</p>${relHTML(CHANGELOG)}</div>
   <div class="card"><h2>🤖 AI assistant (optional)</h2><p class="small">With a Claude API key saved under <b>Crew rules → AI assistant</b>: <b>Read job notes with AI</b> pulls trucks, crew size, requested and “don't send” people and important notes out of messy calendar text. After building crews, <b>Review with AI</b> looks for problems and better swaps — type anything special for today (who has to leave early, who to keep off a job) and it takes that into account. Each suggestion has an <b>Apply</b> button; applied people are locked 🔒 so a rebuild keeps them. Only names, jobs, distances and rules are sent — never addresses or phone numbers.</p></div>
@@ -1348,6 +1370,244 @@ function rAISettings(){
   <div class="row" style="margin-top:10px"><button class="b p" data-act="aiSave">Save</button><button class="b" data-act="aiTest" ${c.key?"":"disabled"}>Test</button>${c.key?`<button class="b" data-act="aiRemove" style="color:var(--bad)">Remove key</button>`:""}</div>
   <p class="small muted" style="margin-bottom:0">AI sends worker names, lead status, job titles/notes, distances and crew rules to Anthropic. Home addresses, phone numbers and map locations are never sent. AI features work on the website version (not on the shared Claude page).</p></div>`;
 }
+/* ---------- history ----------
+   One record per day, kept forever. Stored in IndexedDB (falls back to localStorage), included in backups,
+   and optionally mirrored to a file on a PC (Chrome/Edge File System Access). Names are copied into each
+   record so history still reads correctly after a worker is deleted. */
+const HIST=new Map();let histLoaded=false;
+const STATUS={done:{label:"Completed",icon:"✅"},rain:{label:"Rained out",icon:"🌧"},cancel:{label:"Cancelled",icon:"❌"}};
+const CHANGE_KINDS={home:"Sent home early",noshow:"No-show",swapin:"Swapped in",other:"Other"};
+const IDB={
+  db:null,
+  open(){return new Promise((res,rej)=>{try{const r=indexedDB.open("crew-scheduler",1);r.onupgradeneeded=()=>{const d=r.result;if(!d.objectStoreNames.contains("days"))d.createObjectStore("days",{keyPath:"date"});if(!d.objectStoreNames.contains("kv"))d.createObjectStore("kv")};r.onsuccess=()=>{IDB.db=r.result;res(r.result)};r.onerror=()=>rej(r.error)}catch(e){rej(e)}})},
+  tx(store,mode,fn){return new Promise((res,rej)=>{const t=IDB.db.transaction(store,mode);const st=t.objectStore(store);let out;Promise.resolve(fn(st)).then(v=>out=v);t.oncomplete=()=>res(out);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)})},
+  all(){return new Promise((res,rej)=>{const r=IDB.db.transaction("days").objectStore("days").getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error)})},
+  put(rec){return IDB.tx("days","readwrite",st=>{st.put(rec)})},
+  del(date){return IDB.tx("days","readwrite",st=>{st.delete(date)})},
+  clear(){return IDB.tx("days","readwrite",st=>{st.clear()})},
+  get(key){return new Promise((res,rej)=>{const r=IDB.db.transaction("kv").objectStore("kv").get(key);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})},
+  set(key,v){return IDB.tx("kv","readwrite",st=>{st.put(v,key)})},
+};
+let histMode="idb";
+async function histInit(){
+  try{await IDB.open();(await IDB.all()).forEach(r=>HIST.set(r.date,r))}
+  catch(e){histMode="ls";const o=lsGet("crew_history")||{};Object.values(o).forEach(r=>HIST.set(r.date,r));logEvent("history","IndexedDB unavailable, using localStorage")}
+  histLoaded=true;
+  await fileInit();
+  render();
+}
+async function histPut(rec){
+  HIST.set(rec.date,rec);
+  if(histMode==="idb"){try{await IDB.put(rec)}catch(e){histMode="ls";logEvent("error","IndexedDB write failed: "+e.message)}}
+  if(histMode==="ls"){const o={};HIST.forEach((r,k)=>o[k]=r);lsSet("crew_history",o)}
+  fileSync();
+}
+async function histClear(){
+  HIST.clear();
+  if(histMode==="idb"){try{await IDB.clear()}catch(e){}}
+  try{localStorage.removeItem("crew_history")}catch(e){}
+  fileSync();
+}
+const jobKey=j=>((j.title||j.name||"")+"|"+(j.time||"")).toLowerCase();
+const clientOf=j=>{const t=parseJobTitle(j.title||"");return t.client||String(j.name||"").split(" / ")[0]};
+const contactOf=j=>{const t=parseJobTitle(j.title||"");return t.contact||String(j.name||"").split(" / ")[1]||""};
+function snapshotJobs(){
+  const out=[];
+  for(const j of tonight.jobs){
+    const c=tonight.assign&&tonight.assign[j.id];if(!c)continue;
+    const trucks=trucksFor(j,c).trucks.map((t,k)=>({truck:k+1,lead:t.lead?{id:t.lead.id,name:t.lead.name}:null,
+      workers:t.crew.map(w=>{const g=legFor(j,w,t);const m=t.lead&&meetFor(w.id,t.lead.id,j.id);
+        return {id:w.id,name:w.name,how:g?({pickup:"Picked up at home",meet:m?"Met truck at "+m.name:"Met truck along the way",atlead:"Met at lead's home",atjob:"Met at job",job:"Drove to job"}[g.kind]||""):""}})}));
+    out.push({key:jobKey(j),time:j.time||"",name:j.name,client:clientOf(j),contact:contactOf(j),title:j.title||"",address:j.address||"",trucks:jTrucks(j),perTruck:jPer(j),note:"",aiNote:j.aiNote||"",status:null,closedAt:null,people:[],crews:trucks});
+  }
+  return out;
+}
+const crewSig=jobs=>jobs.map(j=>j.key+":"+j.crews.map(t=>(t.lead?t.lead.name:"-")+"+"+t.workers.map(w=>w.name).sort().join(",")).join("/")).sort().join(";");
+function scheduleDay(){return (tonight.jobs.find(j=>j.day)||{}).day||dayKey(new Date())}
+function histPeople(jb){return [...jb.crews.flatMap(t=>[t.lead&&t.lead.name,...t.workers.map(w=>w.name)]).filter(Boolean)]}
+async function saveDayToHistory(quiet){
+  if(!tonight.assign){if(!quiet)toast("Build crews first");return}
+  const date=scheduleDay();const now=new Date().toISOString();
+  const jobs=snapshotJobs();if(!jobs.length){if(!quiet)toast("No crews to save");return}
+  const prev=HIST.get(date);
+  const rec=prev?JSON.parse(JSON.stringify(prev)):{date,createdAt:now,saves:0,changes:[],jobs:[]};
+  const what=[];
+  const prevByKey=new Map((prev?prev.jobs:[]).map(j=>[j.key,j]));
+  const merged=jobs.map(nj=>{const pj=prevByKey.get(nj.key);
+    if(pj){prevByKey.delete(nj.key);
+      const a=new Set(histPeople(pj)),b=new Set(histPeople(nj));
+      const add=[...b].filter(x=>!a.has(x)),rem=[...a].filter(x=>!b.has(x));
+      if(add.length||rem.length)what.push(`${nj.name}: ${[...add.map(x=>"+"+x),...rem.map(x=>"−"+x)].join(", ")}`);
+      return {...nj,note:pj.note||"",status:pj.status||null,closedAt:pj.closedAt||null,people:pj.people||[]};
+    }
+    if(prev)what.push(`Added ${nj.name}`);
+    return nj;});
+  for(const pj of prevByKey.values()){if(!pj.dropped)what.push(`${pj.name} no longer on the schedule`);merged.push({...pj,dropped:true})}
+  rec.jobs=merged;rec.saves=(rec.saves||0)+1;rec.updatedAt=now;rec.appVersion=APP_VERSION;
+  if(!prev)rec.changes.push({at:now,what:"Schedule saved"});
+  else if(what.length)rec.changes.push({at:now,what:"Schedule resent — "+what.join("; ")});
+  tonight.histSaved={date,sig:crewSig(jobs),at:now};save("tonight");
+  await histPut(rec);
+  logEvent("history",`saved ${date} (${jobs.length} jobs)`);
+  render();
+  if(!quiet)toast(prev?(what.length?"History updated with the changes":"History already up to date"):"Saved to History");
+}
+function histUnsaved(){
+  if(!tonight.assign)return false;
+  const sig=crewSig(snapshotJobs());
+  return !tonight.histSaved||tonight.histSaved.sig!==sig||tonight.histSaved.date!==scheduleDay();
+}
+function openCloseouts(){
+  const today=dayKey(new Date());const out=[];
+  HIST.forEach(r=>{if(r.date<today){const n=r.jobs.filter(j=>!j.dropped&&!j.status).length;if(n)out.push({date:r.date,n})}});
+  return out.sort((a,b)=>a.date.localeCompare(b.date));
+}
+async function histEdit(date,fn,what){
+  const r=HIST.get(date);if(!r)return;const c=JSON.parse(JSON.stringify(r));
+  fn(c);c.updatedAt=new Date().toISOString();if(what)c.changes.push({at:c.updatedAt,what});
+  await histPut(c);render();
+}
+const dLabel=(d,opt)=>{const [y,m,dd]=d.split("-").map(Number);return new Date(y,m-1,dd).toLocaleDateString([],opt||{weekday:"short",month:"short",day:"numeric",year:"numeric"})};
+const tLabel=iso=>new Date(iso).toLocaleString([], {month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+
+/* --- PC file (Chrome/Edge) --- */
+let fileHandle=null,fileState="none",fileLast=null; // none | ok | reconnect | unsupported
+const fileSupported=()=>typeof window.showSaveFilePicker==="function"&&window.self===window.top;
+async function fileInit(){
+  if(!fileSupported()){fileState="unsupported";return}
+  try{fileHandle=histMode==="idb"?await IDB.get("histFile"):null}catch(e){fileHandle=null}
+  if(!fileHandle){fileState="none";return}
+  try{const p=fileHandle.queryPermission?await fileHandle.queryPermission({mode:"readwrite"}):"prompt";fileState=p==="granted"?"ok":"reconnect"}catch(e){fileState="reconnect"}
+}
+function historyJSON(){return JSON.stringify({app:"crew-scheduler",kind:"history",version:1,exportedAt:new Date().toISOString(),appVersion:APP_VERSION,days:[...HIST.values()].sort((a,b)=>a.date.localeCompare(b.date))},null,1)}
+let fileBusy=false,fileAgain=false;
+async function fileSync(){
+  if(!fileHandle||fileState!=="ok")return;
+  if(fileBusy){fileAgain=true;return}
+  fileBusy=true;
+  try{const w=await fileHandle.createWritable();await w.write(historyJSON());await w.close();fileLast=new Date().toISOString()}
+  catch(e){fileState="reconnect";logEvent("error","History file write failed: "+e.message);render()}
+  fileBusy=false;if(fileAgain){fileAgain=false;fileSync()}
+}
+async function fileConnect(){
+  try{
+    const h=await window.showSaveFilePicker({suggestedName:"Crew History.json",types:[{description:"Crew history",accept:{"application/json":[".json"]}}]});
+    fileHandle=h;fileState="ok";if(histMode==="idb"){try{await IDB.set("histFile",h)}catch(e){logEvent("history","couldn't remember file handle: "+e.message)}}
+    // if the chosen file already has history (e.g. from another PC), merge it in first
+    try{const t=await (await h.getFile()).text();if(t.trim()){const n=mergeHistory(JSON.parse(t).days||[]);if(n)toast(`Merged ${n} day(s) from the file`)}}catch(e){}
+    await fileSync();logEvent("history","file connected");render();toast("History file connected — it updates automatically");
+  }catch(e){if(e&&e.name!=="AbortError")toast("Couldn't connect the file: "+e.message)}
+}
+async function fileReconnect(){
+  try{const p=await fileHandle.requestPermission({mode:"readwrite"});fileState=p==="granted"?"ok":"reconnect";if(fileState==="ok")await fileSync();render()}catch(e){toast("Couldn't reconnect: "+e.message)}
+}
+async function fileDisconnect(){fileHandle=null;fileState="none";if(histMode==="idb"){try{await IDB.set("histFile",null)}catch(e){}}render()}
+/* merge days from a backup or history file: newer edits win, nothing is deleted */
+function mergeHistory(days){
+  let n=0;
+  for(const d of (days||[])){
+    if(!d||!/^\d{4}-\d{2}-\d{2}$/.test(d.date)||!Array.isArray(d.jobs))continue;
+    const cur=HIST.get(d.date);
+    if(!cur||(d.updatedAt||"")>(cur.updatedAt||"")){HIST.set(d.date,d);n++;
+      if(histMode==="idb")IDB.put(d).catch(()=>{});}
+  }
+  if(n&&histMode==="ls"){const o={};HIST.forEach((r,k)=>o[k]=r);lsSet("crew_history",o)}
+  if(n)fileSync();
+  return n;
+}
+
+/* --- History tab UI --- */
+let histMonth=null,histSel=null,histQ="";
+function rHistory(){
+  if(!histLoaded)return `<div class="card"><p class="muted">Loading history…</p></div>`;
+  const today=dayKey(new Date());
+  if(!histMonth){const d=new Date();histMonth=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`}
+  const od=openCloseouts();
+  let h="";
+  if(od.length)h+=`<div class="card" style="border-color:var(--warn)"><h2>Close out</h2>${od.slice(-5).map(o=>`<div class="row" style="justify-content:space-between;margin-top:6px"><span>${esc(dLabel(o.date))} · <b>${o.n}</b> job${o.n>1?"s":""} not closed out</span><button class="b small p" data-act="histOpen" data-d="${o.date}">Close out</button></div>`).join("")}</div>`;
+  // calendar
+  const [Y,M]=histMonth.split("-").map(Number);
+  const first=new Date(Y,M-1,1),days=new Date(Y,M,0).getDate();
+  let cal=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d=>`<div class="dow">${d}</div>`).join("");
+  for(let i=0;i<first.getDay();i++)cal+=`<div class="d empty"></div>`;
+  for(let d=1;d<=days;d++){
+    const k=`${Y}-${String(M).padStart(2,"0")}-${String(d).padStart(2,"0")}`;const r=HIST.get(k);
+    const dots=r?r.jobs.filter(j=>!j.dropped).slice(0,12).map(j=>`<span class="dot st-${j.status||"open"}"></span>`).join(""):"";
+    cal+=`<button class="d ${k===today?"today":""} ${k===histSel?"sel":""}" data-act="histOpen" data-d="${k}"><span>${d}</span><span class="dots">${dots}</span></button>`;
+  }
+  h+=`<div class="card"><div class="row" style="justify-content:space-between"><button class="b small" data-act="histMonth" data-m="-1">‹</button><h2 style="margin:0">${first.toLocaleDateString([], {month:"long",year:"numeric"})}</h2><button class="b small" data-act="histMonth" data-m="1">›</button></div>
+    <div class="cal">${cal}</div>
+    <div class="small muted" style="margin-top:8px"><span class="dot st-done" style="display:inline-block;width:8px;height:8px;border-radius:50%"></span> Completed &nbsp; <span class="dot st-rain" style="display:inline-block;width:8px;height:8px;border-radius:50%"></span> Rained out &nbsp; <span class="dot st-cancel" style="display:inline-block;width:8px;height:8px;border-radius:50%"></span> Cancelled &nbsp; <span class="dot st-open" style="display:inline-block;width:8px;height:8px;border-radius:50%"></span> Not closed out</div>
+    ${HIST.size?"":`<p class="small muted" style="margin-bottom:0">No days saved yet. A day is saved when you tap <b>Copy schedule</b> or <b>Save to History</b> on the Today tab.</p>`}</div>`;
+  if(histSel)h+=rHistDay(histSel);
+  // search
+  h+=`<div class="card"><h2>Search</h2><input type="text" id="histQ" placeholder="Name, client or town — e.g. Marcus, Duke Energy, Raeford" value="${esc(histQ)}"><div id="histRes">${histQ?rHistSearch(histQ):""}</div></div>`;
+  // export + file
+  const mStart=`${histMonth}-01`,mEnd=`${histMonth}-${String(days).padStart(2,"0")}`;
+  h+=`<div class="card"><h2>Export &amp; save</h2>
+    <div class="row"><div><label class="f">From</label><input type="date" id="hxFrom" value="${mStart}" style="width:auto"></div><div><label class="f">To</label><input type="date" id="hxTo" value="${mEnd}" style="width:auto"></div></div>
+    <div class="row" style="margin-top:8px"><button class="b p" data-act="histCsv">Export spreadsheet (CSV)</button><button class="b" data-act="histJson">Save all history (.json)</button><label class="b">Load history file<input type="file" id="histLoad" accept=".json,application/json" class="hide"></label></div>
+    <h3>Keep a copy on this computer</h3>
+    ${fileState==="unsupported"?`<p class="small muted" style="margin:0">Automatic file saving works in Chrome or Edge on a PC. Here, use <b>Save all history</b> now and then, or <b>Workers → Save backup file</b> (it includes history).</p>`
+      :fileState==="ok"?`<div class="good">✓ Saving to <b>${esc(fileHandle&&fileHandle.name||"history file")}</b> automatically${fileLast?` · last saved ${esc(tLabel(fileLast))}`:""}</div><div class="row" style="margin-top:6px"><button class="b small" data-act="fileDisconnect">Stop saving to this file</button></div>`
+      :fileState==="reconnect"?`<div class="warn">The browser needs your OK to keep saving to <b>${esc(fileHandle&&fileHandle.name||"the history file")}</b>.</div><div class="row" style="margin-top:6px"><button class="b p" data-act="fileReconnect">Allow saving</button><button class="b small" data-act="fileDisconnect">Disconnect</button></div>`
+      :`<p class="small muted" style="margin-top:0">Pick a file once (e.g. Documents\\Crew History.json). After that, every saved or closed-out day is written to it automatically.</p><button class="b" data-act="fileConnect">Connect a history file</button>`}
+  </div>`;
+  return h;
+}
+function rHistDay(date){
+  const r=HIST.get(date);
+  if(!r)return `<div class="card"><h2>${esc(dLabel(date))}</h2><p class="small muted" style="margin:0">Nothing saved for this day.</p></div>`;
+  const past=date<dayKey(new Date());
+  let h=`<div class="card" id="histDay"><h2>${esc(dLabel(date,{weekday:"long",month:"long",day:"numeric",year:"numeric"}))}</h2><p class="small muted" style="margin-top:0">Saved ${esc(tLabel(r.createdAt))}${r.saves>1?` · sent ${r.saves} times`:""}${!past?" · close out tomorrow morning":""}</p>`;
+  r.jobs.forEach((j,i)=>{
+    h+=`<div class="job" style="--c:${j.status?({done:"#16a34a",rain:"#2563eb",cancel:"#9ca3af"})[j.status]:"#f59e0b"};margin-bottom:10px;${j.dropped?"opacity:.6":""}"><div class="hd"><span class="nm">${j.time?esc(j.time)+" · ":""}${esc(j.name)}</span></div>${j.address?`<div class="small muted">${esc(j.address)}</div>`:""}${j.dropped?`<div class="small muted">Not on the latest schedule</div>`:""}
+      <div class="row" style="margin:8px 0 4px;gap:6px">${Object.entries(STATUS).map(([k,v])=>`<button class="stbtn ${k} ${j.status===k?"on":""}" data-act="histStatus" data-d="${date}" data-i="${i}" data-s="${k}">${v.icon} ${v.label}</button>`).join("")}</div>
+      ${j.closedAt?`<div class="small muted">Closed out ${esc(tLabel(j.closedAt))}</div>`:""}
+      <div style="margin-top:6px">${j.crews.map(t=>`<div class="small" style="margin-top:3px">${j.crews.length>1?`<b>Truck ${t.truck}:</b> `:""}${t.lead?`<b>${esc(t.lead.name)}</b> (lead)`:`<span style="color:var(--bad)">no lead</span>`}${t.workers.map(w=>`, ${esc(w.name)}${w.how?` <span class="muted">— ${esc(w.how)}</span>`:""}`).join("")}</div>`).join("")}</div>
+      ${(j.people||[]).length?`<div style="margin-top:6px">${j.people.map((pc,k)=>`<div class="small">• <b>${esc(pc.name)}</b>: ${esc(CHANGE_KINDS[pc.kind]||pc.kind)}${pc.note?` — ${esc(pc.note)}`:""} <a href="#" data-act="histDelChange" data-d="${date}" data-i="${i}" data-k="${k}" class="muted">remove</a></div>`).join("")}</div>`:""}
+      <details style="margin-top:6px"><summary class="small">Add a crew change</summary>
+        <div class="row" style="margin-top:6px"><select id="pcName-${i}" class="grow"><option value="">Who?</option>${[...new Set([...histPeople(j),...roster.workers.map(w=>w.name)])].map(n=>`<option>${esc(n)}</option>`).join("")}</select><select id="pcKind-${i}" class="grow">${Object.entries(CHANGE_KINDS).map(([k,v])=>`<option value="${k}">${v}</option>`).join("")}</select></div>
+        <input type="text" id="pcNote-${i}" placeholder="Note (optional) — e.g. left at 11, replaced Cy" style="margin-top:6px">
+        <button class="b small" data-act="histAddChange" data-d="${date}" data-i="${i}" style="margin-top:6px">Add</button></details>
+      <label class="f">Note</label><input type="text" class="histNote" data-d="${date}" data-i="${i}" value="${esc(j.note||"")}" placeholder="e.g. finished early, client moved to Friday">
+    </div>`;
+  });
+  if(r.changes&&r.changes.length)h+=`<details><summary class="small">Change log (${r.changes.length})</summary>${r.changes.slice().reverse().map(c=>`<div class="small" style="margin-top:4px"><span class="muted">${esc(tLabel(c.at))}</span> — ${esc(c.what)}</div>`).join("")}</details>`;
+  return h+`</div>`;
+}
+function rHistSearch(q){
+  const terms=q.toLowerCase().split(/\s+/).filter(Boolean);if(!terms.length)return "";
+  const rows=[];
+  [...HIST.values()].sort((a,b)=>b.date.localeCompare(a.date)).forEach(r=>r.jobs.forEach(j=>{
+    const people=histPeople(j).concat((j.people||[]).map(p=>p.name));
+    const hay=[j.name,j.client,j.contact,j.title,j.address,j.note,...people].join(" ").toLowerCase();
+    if(terms.every(t=>hay.includes(t)))rows.push({r,j});
+  }));
+  if(!rows.length)return `<p class="small muted">No matches.</p>`;
+  return `<p class="small muted">${rows.length} match${rows.length>1?"es":""}</p>`+rows.slice(0,150).map(({r,j})=>{
+    const st=j.status?STATUS[j.status].icon+" "+STATUS[j.status].label:"Not closed out";
+    return `<div class="item" style="margin-top:6px;cursor:pointer" data-act="histOpen" data-d="${r.date}"><div class="main"><div class="t">${esc(dLabel(r.date))} · ${j.time?esc(j.time)+" · ":""}${esc(j.name)}</div><div class="s">${esc(j.address||"")} · ${esc(st)}<br>${j.crews.map(t=>`${j.crews.length>1?"Truck "+t.truck+": ":""}${t.lead?esc(t.lead.name)+" (lead)":"no lead"}${t.workers.map(w=>", "+esc(w.name)).join("")}`).join(" · ")}</div></div></div>`}).join("");
+}
+function historyCSV(from,to){
+  const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
+  const rows=[["Date","Day","Time","Client","Contact","Job","Location","Status","Truck","Role","Person","How they got there","Crew change","Job note"]];
+  [...HIST.values()].filter(r=>(!from||r.date>=from)&&(!to||r.date<=to)).sort((a,b)=>a.date.localeCompare(b.date)).forEach(r=>{
+    const day=dLabel(r.date,{weekday:"short"});
+    r.jobs.forEach(j=>{
+      const st=j.dropped?"Not on final schedule":j.status?STATUS[j.status].label:"Not closed out";
+      const chg=n=>(j.people||[]).filter(p=>p.name===n).map(p=>(CHANGE_KINDS[p.kind]||p.kind)+(p.note?": "+p.note:"")).join("; ");
+      const base=[r.date,day,j.time,j.client,j.contact,j.name,j.address,st];
+      j.crews.forEach(t=>{
+        rows.push([...base,t.truck,"Lead",t.lead?t.lead.name:"(no lead)","Drove truck",t.lead?chg(t.lead.name):"",j.note]);
+        t.workers.forEach(w=>rows.push([...base,t.truck,"Worker",w.name,w.how,chg(w.name),j.note]));
+      });
+      const inCrew=new Set(histPeople(j));
+      (j.people||[]).filter(p=>!inCrew.has(p.name)).forEach(p=>rows.push([...base,"","Worker",p.name,"",(CHANGE_KINDS[p.kind]||p.kind)+(p.note?": "+p.note:""),j.note]));
+    });
+  });
+  return rows.map(r=>r.map(q).join(",")).join("\n");
+}
 /* ---------- download a copy of the app ---------- */
 const canDownloadApp=()=>/^https?:$/.test(location.protocol)&&!(window.claude&&window.claude.use)&&!/claude\.ai|claudeusercontent/.test(location.host);
 async function downloadApp(){
@@ -1406,6 +1666,7 @@ Made ${now.toLocaleString()} · app version ${APP_VERSION}
 
 What's inside:
   roster-backup.json  Crew leads, workers, crew rules and settings. Can be restored with Workers → Restore backup.
+  history-last-60-days.json  Saved days and close-outs from the last 60 days.
   today.json          Today's jobs (with the calendar titles/notes), who's off, crews, locks, requested people, meet spots.
   last-import.json    The raw calendar events (or pasted text) from the last import.
   schedule.txt        The schedule exactly as "Copy schedule" makes it.
@@ -1420,6 +1681,7 @@ This contains names, addresses and phone numbers. Only share it with someone you
     "README.txt":readme,
     "roster-backup.json":rosterBackup(),
     "today.json":JSON.stringify(tonight,null,1),
+    "history-last-60-days.json":JSON.stringify([...HIST.values()].filter(r=>r.date>=dayKey(new Date(Date.now()-60*864e5))),null,1),
     "last-import.json":JSON.stringify(lastImport,null,1),
     "schedule.txt":tonight.assign?scheduleText():"Crews not built yet.",
     "crews.csv":tonight.assign?scheduleCSV():"",
@@ -1443,7 +1705,8 @@ This contains names, addresses and phone numbers. Only share it with someone you
 /* ---------- roster backup / restore ---------- */
 function rosterBackup(){
   return JSON.stringify({app:"crew-scheduler",kind:"roster",version:2,exportedAt:new Date().toISOString(),
-    roster:{workers:roster.workers,conflicts:roster.conflicts,prefers:roster.prefers,settings:roster.settings}},null,1);
+    roster:{workers:roster.workers,conflicts:roster.conflicts,prefers:roster.prefers,settings:roster.settings},
+    history:{days:[...HIST.values()].sort((a,b)=>a.date.localeCompare(b.date))}},null,1);
 }
 function workersCSV(){
   const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
@@ -1459,7 +1722,7 @@ function readBackup(text){
     lat:typeof w.lat==="number"&&Math.abs(w.lat)<=90?w.lat:null,lng:typeof w.lng==="number"&&Math.abs(w.lng)<=180?w.lng:null,
     phone:String(w.phone||"").slice(0,40),lead:!!w.lead,active:w.active!==false,maxMiles:+w.maxMiles>0?+w.maxMiles:0,geoNote:w.geoNote?String(w.geoNote).slice(0,200):""});
   const pairs=a=>Array.isArray(a)?a.filter(p=>Array.isArray(p)&&p.length===2).map(p=>[String(p[0]),String(p[1])]):[];
-  return {workers:r.workers.map(clean),conflicts:pairs(r.conflicts),prefers:pairs(r.prefers),settings:r.settings&&typeof r.settings==="object"?r.settings:null};
+  return {workers:r.workers.map(clean),conflicts:pairs(r.conflicts),prefers:pairs(r.prefers),settings:r.settings&&typeof r.settings==="object"?r.settings:null,historyDays:d.history&&Array.isArray(d.history.days)?d.history.days:[]};
 }
 async function restoreRoster(text){
   let b;try{b=readBackup(text)}catch(e){toast(e.message);return}
@@ -1480,7 +1743,8 @@ async function restoreRoster(text){
     addPairs(b.conflicts,roster.conflicts);addPairs(b.prefers,roster.prefers);
     toast(`${added} added, ${updated} updated`);
   }
-  logEvent("restore",(mode?"replace":"merge")+` ${b.workers.length} workers`);
+  const hn=mergeHistory(b.historyDays);if(hn)setTimeout(()=>toast(`Also restored ${hn} day(s) of history`),2700);
+  logEvent("restore",(mode?"replace":"merge")+` ${b.workers.length} workers, ${hn} history days`);
   normalize();save("roster");save("tonight");render();
   if(mode)toast(`Restored ${b.workers.length} worker${b.workers.length===1?"":"s"} and their crew rules`);
 }
@@ -1572,8 +1836,23 @@ document.addEventListener("click",async e=>{
       tonight.assign=null;tonight.locks={};tonight.meets={};tonight.off=[];delete tonight.aiReview;
       tonight.jobs.forEach(j=>{j.requested=[];j.avoid=[]});
       editingWorker=null;logEvent("delete","workers");save("roster");save("tonight");render();toast("All workers and crew rules deleted");break;}
-    case "copy":copyText(scheduleText());break;
-    case "csv":download("crews-"+new Date().toISOString().slice(0,10)+".csv",scheduleCSV());break;
+    case "copy":copyText(scheduleText());saveDayToHistory(true);break;
+    case "csv":download("crews-"+new Date().toISOString().slice(0,10)+".csv",scheduleCSV());saveDayToHistory(true);break;
+    case "saveHist":saveDayToHistory(false);break;
+    case "histOpen":{histSel=el.dataset.d;histMonth=histSel.slice(0,7);tab="history";render();setTimeout(()=>$("#histDay")?.scrollIntoView({block:"start"}),0);break;}
+    case "histMonth":{const [y,m]=histMonth.split("-").map(Number);const d=new Date(y,m-1+(+el.dataset.m),1);histMonth=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;render();break;}
+    case "histStatus":{const d=el.dataset.d,i=+el.dataset.i,k=el.dataset.s;const r=HIST.get(d);const j=r&&r.jobs[i];if(!j)break;const off=j.status===k;
+      await histEdit(d,c=>{c.jobs[i].status=off?null:k;c.jobs[i].closedAt=off?null:new Date().toISOString()},`${j.name}: ${off?"status cleared":"marked "+STATUS[k].label}`);setTimeout(()=>$("#histDay")?.scrollIntoView({block:"start"}),0);break;}
+    case "histAddChange":{const d=el.dataset.d,i=+el.dataset.i;const n=$("#pcName-"+i).value,k=$("#pcKind-"+i).value,note=$("#pcNote-"+i).value.trim();if(!n){toast("Pick who");break}
+      const j=HIST.get(d).jobs[i];await histEdit(d,c=>{c.jobs[i].people=c.jobs[i].people||[];c.jobs[i].people.push({name:n,kind:k,note,at:new Date().toISOString()})},`${j.name}: ${n} — ${CHANGE_KINDS[k]}${note?" ("+note+")":""}`);setTimeout(()=>$("#histDay")?.scrollIntoView({block:"start"}),0);break;}
+    case "histDelChange":{const d=el.dataset.d,i=+el.dataset.i,k=+el.dataset.k;const pc=HIST.get(d).jobs[i].people[k];await histEdit(d,c=>{c.jobs[i].people.splice(k,1)},`Removed crew change: ${pc.name} — ${CHANGE_KINDS[pc.kind]||pc.kind}`);break;}
+    case "histCsv":{const f=$("#hxFrom").value,t=$("#hxTo").value;const csv=historyCSV(f,t);if(csv.split("\n").length<2){toast("No saved days in that range");break}download(`crew-history-${f||"start"}-to-${t||"end"}.csv`,csv);break;}
+    case "histJson":download(`crew-history-${dayKey(new Date())}.json`,historyJSON());break;
+    case "fileConnect":fileConnect();break;
+    case "fileReconnect":fileReconnect();break;
+    case "fileDisconnect":fileDisconnect();break;
+    case "delHistory":{const r=await ask(`Delete all ${HIST.size} saved day${HIST.size===1?"":"s"} of history? This can't be undone.`,"Delete history","Save history first");
+      if(r===false){download(`crew-history-${dayKey(new Date())}.json`,historyJSON());break}if(!r)break;await histClear();logEvent("delete","history");render();toast("History deleted");break;}
     case "spot":pickSpot(el.dataset.w,el.dataset.j);break;
     case "lock":{const w=el.dataset.w,j=el.dataset.j;if(tonight.locks[w]===j)delete tonight.locks[w];else tonight.locks[w]=j;save("tonight");render();break;}
     case "unassign":{const w=el.dataset.w,j=el.dataset.j;tonight.assign[j]=tonight.assign[j].filter(x=>x!==w);delete tonight.locks[w];save("tonight");render();break;}
@@ -1619,11 +1898,16 @@ document.addEventListener("click",async e=>{
     case "copyRoster":copyText(rosterBackup(),"Backup copied — paste it into an email or note to yourself");break;
     case "restoreRoster":restoreDialog();break;
     case "workersCsv":download(`crew-workers-${new Date().toISOString().slice(0,10)}.csv`,workersCSV());break;
-    case "wipe":if(await ask("Delete everything — workers, rules, settings, jobs and crews? This can't be undone.","Delete everything")){logEvent("delete","everything");roster={workers:[],conflicts:[],prefers:[],settings:{...DEFAULT_SETTINGS}};tonight={jobs:[],assign:null,locks:{},off:[],importedAt:null,source:""};save("roster");save("tonight");render()}break;
+    case "wipe":if(await ask("Delete everything — workers, rules, settings, jobs, crews and history? This can't be undone.","Delete everything")){logEvent("delete","everything");await histClear();roster={workers:[],conflicts:[],prefers:[],settings:{...DEFAULT_SETTINGS}};tonight={jobs:[],assign:null,locks:{},off:[],importedAt:null,source:""};save("roster");save("tonight");render()}break;
   }
+});
+document.addEventListener("input",e=>{
+  if(e.target.id==="histQ"){histQ=e.target.value;const r=$("#histRes");if(r)r.innerHTML=histQ.trim()?rHistSearch(histQ):""}
 });
 document.addEventListener("change",e=>{
   const el=e.target;
+  if(el.classList.contains("histNote")){const d=el.dataset.d,i=+el.dataset.i;const v=el.value.trim();const j=HIST.get(d).jobs[i];if((j.note||"")!==v)histEdit(d,c=>{c.jobs[i].note=v},`${j.name}: note “${v}”`);return}
+  if(el.id==="histLoad"){const f=el.files[0];if(!f)return;f.text().then(t=>{const d=JSON.parse(t);const days=d.days||(d.history&&d.history.days)||[];const n=mergeHistory(days);render();toast(n?`Loaded ${n} day(s) of history`:"Nothing new in that file")}).catch(()=>toast("That isn't a Crew Scheduler history file"));return}
   if(el.dataset.act==="jobCrew"){const j=jById(el.dataset.id);j.crew=Math.max(1,+el.value||1);save("tonight");if(tonight.assign)render();return}
   if(el.dataset.act==="jobTrucks"){const j=jById(el.dataset.id);j.trucks=Math.max(1,+el.value||1);save("tonight");if(tonight.assign)render();return}
   if(el.dataset.act==="assignTo"){const wid=el.value,jid=el.dataset.j;if(!wid)return;
@@ -1652,6 +1936,7 @@ $("#appVer").textContent="v"+APP_VERSION;
 })();
 render();
 initDB();
+histInit();
 </script>
 </body>
 </html>
