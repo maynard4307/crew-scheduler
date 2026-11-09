@@ -1,5 +1,7 @@
 # Crew Scheduler
 
+> **Working on this app (person or AI)? Start with [HANDOFF.md](HANDOFF.md)** — rules, architecture, how to ship, decisions.
+
 Builds daily crews from the job calendar: one crew lead (with the company truck) per truck, workers picked up or met along the lead's route, requested crews, and can't-work-together rules.
 
 Open it at **https://maynard4307.github.io/crew-scheduler/** and on a phone tap Share → Add to Home Screen.
