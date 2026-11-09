@@ -20,6 +20,7 @@ body{margin:0;font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
 header{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line)}
 .top{display:flex;align-items:center;justify-content:space-between;padding:10px 14px 4px;max-width:980px;margin:0 auto}
 h1{font-size:18px;margin:0}
+.ver{font-size:11px;font-weight:500;color:var(--muted);margin-left:4px;white-space:nowrap}
 #saveState{font-size:12px;color:var(--muted)}
 nav{display:flex;gap:2px;padding:0 8px;max-width:980px;margin:0 auto;overflow-x:auto}
 nav button{flex:1;min-width:max-content;background:none;border:0;border-bottom:3px solid transparent;padding:10px 12px;font:inherit;color:var(--muted);cursor:pointer}
@@ -79,7 +80,7 @@ code{background:var(--chip);padding:1px 5px;border-radius:5px;font-size:13px;ove
 </head>
 <body>
 <header>
-  <div class="top"><h1>Crew Scheduler</h1><span id="saveState">Loading…</span></div>
+  <div class="top"><h1>Crew Scheduler <span id="appVer" class="ver"></span></h1><span id="saveState">Loading…</span></div>
   <nav id="tabs">
     <button data-tab="tonight" class="on">Today</button>
     <button data-tab="workers">Workers</button>
@@ -94,7 +95,7 @@ code{background:var(--chip);padding:1px 5px;border-radius:5px;font-size:13px;ove
 <script>
 "use strict";
 /* ---------- state ---------- */
-const APP_VERSION="2026.11.08-ai1";
+const APP_VERSION="2026.11.09-a";
 /* Small rolling log of errors and key actions, kept on this device for support packs. */
 const LOG=(()=>{try{return JSON.parse(localStorage.getItem("crew_log"))||[]}catch(e){return []}})();
 function logEvent(type,msg,extra){
@@ -1025,7 +1026,7 @@ function rWorkers(){
   h+=`<div class="card"><h2>Back up &amp; move to another device</h2>
   <p class="muted small">Saves every crew lead and worker (names, addresses, locations, phones, lead status), the can't-work-together and work-well-together lists, and your settings. Restore it on another phone or computer, or into a newer version of this tool.</p>
   <div class="row"><button class="b p" data-act="saveRoster" ${roster.workers.length?"":"disabled"}>Save backup file</button><button class="b" data-act="copyRoster" ${roster.workers.length?"":"disabled"}>Copy backup text</button><button class="b" data-act="restoreRoster">Restore backup</button></div>
-  <div class="row" style="margin-top:8px"><button class="b small" data-act="workersCsv" ${roster.workers.length?"":"disabled"}>Export workers as spreadsheet (CSV)</button></div>
+  <div class="row" style="margin-top:8px"><button class="b small" data-act="workersCsv" ${roster.workers.length?"":"disabled"}>Export workers as spreadsheet (CSV)</button>${roster.workers.length?`<button class="b small" data-act="delWorkers" style="color:var(--bad)">Delete all workers…</button>`:""}</div>
   ${roster.workers.length?`<p class="small muted" style="margin-bottom:0">Tip: save a backup whenever you add or change workers. Email it to yourself or keep it in Google Drive so it's never lost.</p>`:""}</div>`;
   return h;
 }
@@ -1063,7 +1064,14 @@ function rRulesInner(){
   <p class="small muted" style="margin:10px 0 4px">Every truck always needs one crew lead.</p>
   <label class="row small" style="margin-bottom:6px"><input type="checkbox" data-set="allowStores" ${s.allowStores?"checked":""}> Meet spot search: include store &amp; gas station lots (Walmart, Food Lion…)</label>
   <label class="row small"><input type="checkbox" data-set="leadsAsHelpers" ${s.leadsAsHelpers?"checked":""}> If there are spare leads, let them fill worker spots (their truck stays parked)</label>
-  <h3>Backup</h3><div class="row"><button class="b" data-act="saveRoster">Save backup file</button><button class="b" data-act="restoreRoster">Restore backup</button><button class="b" data-act="wipe" style="color:var(--bad)">Delete everything</button></div>
+  <h3>Backup</h3><div class="row"><button class="b" data-act="saveRoster">Save backup file</button><button class="b" data-act="restoreRoster">Restore backup</button></div>
+  <h3>Delete data</h3><p class="small muted" style="margin-top:0">Pick only what you want to clear. Save a backup first if you might want it back.</p>
+  <div class="list">
+    <div class="item"><div class="main"><div class="t">Today's crews</div><div class="s">Clears the crews, locks, meet spots and AI review. Keeps today's jobs, workers and rules.</div></div><button class="b small" data-act="delCrews" ${tonight.assign?"":"disabled"}>Clear</button></div>
+    <div class="item"><div class="main"><div class="t">Today's jobs &amp; crews</div><div class="s">Same as “Start new day”: clears jobs, crews and who's off. Keeps workers and rules.</div></div><button class="b small" data-act="delDay" ${tonight.jobs.length?"":"disabled"}>Clear</button></div>
+    <div class="item"><div class="main"><div class="t">All workers &amp; crew rules</div><div class="s">Deletes every crew lead and worker, and the can't-work-together / work-well-together lists. Keeps settings and today's jobs.</div></div><button class="b small" data-act="delWorkers" style="color:var(--bad)" ${roster.workers.length?"":"disabled"}>Delete</button></div>
+    <div class="item"><div class="main"><div class="t">Everything</div><div class="s">Workers, rules, settings, jobs and crews. The AI key stays (remove it in AI assistant).</div></div><button class="b small" data-act="wipe" style="color:var(--bad)">Delete</button></div>
+  </div>
   <h3>Having a problem?</h3><p class="small muted" style="margin-top:0">Packs every worker, crew rule, today's jobs, the last calendar import, the crews and a log of recent errors into one .zip file you can send for help.</p>
   <div class="row"><button class="b p" data-act="supportPack">Pack &amp; save for support</button></div>
   <p class="small muted">Version ${APP_VERSION}</p>
@@ -1491,6 +1499,17 @@ document.addEventListener("click",async e=>{
     case "allOn":tonight.off=[];save("tonight");render();break;
     case "solve":{el.disabled=true;el.textContent="Working…";setTimeout(()=>{solve();render()},20);break;}
     case "clearAsg":tonight.assign=null;tonight.locks={};save("tonight");render();break;
+    case "delCrews":if(await ask("Clear today's crews? Jobs, workers and rules stay.","Clear crews")){tonight.assign=null;tonight.locks={};tonight.meets={};delete tonight.aiReview;logEvent("delete","crews");save("tonight");render();toast("Today's crews cleared")}break;
+    case "delDay":if(await ask("Clear today's jobs, crews and who's-off list? Workers and rules stay.","Clear day")){tonight={jobs:[],assign:null,locks:{},off:[],importedAt:null,source:""};logEvent("delete","day");save("tonight");render();toast("Today cleared")}break;
+    case "delWorkers":{
+      const n=roster.workers.length;
+      const r=await ask(`Delete all ${n} worker${n===1?"":"s"} and crew rules? This can't be undone. Save a backup first if you might want them back.`,"Delete workers","Save backup first");
+      if(r===false){download(`crew-roster-${new Date().toISOString().slice(0,10)}.json`,rosterBackup());break}
+      if(!r)break;
+      roster.workers=[];roster.conflicts=[];roster.prefers=[];
+      tonight.assign=null;tonight.locks={};tonight.meets={};tonight.off=[];delete tonight.aiReview;
+      tonight.jobs.forEach(j=>{j.requested=[];j.avoid=[]});
+      editingWorker=null;logEvent("delete","workers");save("roster");save("tonight");render();toast("All workers and crew rules deleted");break;}
     case "copy":copyText(scheduleText());break;
     case "csv":download("crews-"+new Date().toISOString().slice(0,10)+".csv",scheduleCSV());break;
     case "spot":pickSpot(el.dataset.w,el.dataset.j);break;
@@ -1536,7 +1555,7 @@ document.addEventListener("click",async e=>{
     case "copyRoster":copyText(rosterBackup(),"Backup copied — paste it into an email or note to yourself");break;
     case "restoreRoster":restoreDialog();break;
     case "workersCsv":download(`crew-workers-${new Date().toISOString().slice(0,10)}.csv`,workersCSV());break;
-    case "wipe":if(await ask("Delete all workers, rules and jobs? This can't be undone.","Delete everything")){roster={workers:[],conflicts:[],prefers:[],settings:{...DEFAULT_SETTINGS}};tonight={jobs:[],assign:null,locks:{},off:[],importedAt:null,source:""};save("roster");save("tonight");render()}break;
+    case "wipe":if(await ask("Delete everything — workers, rules, settings, jobs and crews? This can't be undone.","Delete everything")){logEvent("delete","everything");roster={workers:[],conflicts:[],prefers:[],settings:{...DEFAULT_SETTINGS}};tonight={jobs:[],assign:null,locks:{},off:[],importedAt:null,source:""};save("roster");save("tonight");render()}break;
   }
 });
 document.addEventListener("change",e=>{
@@ -1559,6 +1578,7 @@ $("#fileWorkers").addEventListener("change",async e=>{
     p.forEach(x=>{if(!x.address&&x.desc)x.address=x.desc.split("\n")[0].slice(0,120)});importWorkers(p)}catch(err){toast(err.message||"Couldn't read that file")}
 });
 
+$("#appVer").textContent="v"+APP_VERSION;
 render();
 initDB();
 </script>
