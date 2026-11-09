@@ -105,15 +105,16 @@ code{background:var(--chip);padding:1px 5px;border-radius:5px;font-size:13px;ove
   </nav>
 </header>
 <main id="app"></main>
-<input type="file" id="fileJobs" accept=".kml,.kmz,.csv,.ics,.txt,application/vnd.google-earth.kml+xml" class="hide">
+<input type="file" id="fileJobs" accept=".kml,.kmz,.csv,.ics,.txt,.zip,.json,application/vnd.google-earth.kml+xml" class="hide">
 <input type="file" id="fileWorkers" accept=".kml,.kmz,.csv,.txt,.json,application/json" class="hide">
 
 <script>
 "use strict";
 /* ---------- state ---------- */
-const APP_VERSION="2026.11.09-i";
+const APP_VERSION="2026.11.09-j";
 /* Release notes — newest first. Add an entry here with every update. */
 const CHANGELOG=[
+ {v:"2026.11.09-j",date:"Nov 9, 2026",added:["Load jobs from a support pack: Today → Open job file, pick the pack (.zip). The jobs come back as they were — report times, addresses, map spots, trucks, crew sizes, requested and don't-send people, notes and who's off. It also offers to load the pack's workers."]},
  {v:"2026.11.09-i",date:"Nov 9, 2026",added:["Smarter address lookup: messy addresses are cleaned up first (like “1891-1801 NC-24” → “1891 NC Highway 24”), more free map services are asked (US Census, and OpenRouteService if your routing key is set), and the result in the town or ZIP you typed is picked — not one far away.","If the house can't be found, it falls back to the road, then the ZIP code area, before the town center.","Fixed spots are remembered: when you paste the right location for an address, every later job or worker with that address uses it automatically. Saved spots are included in backups.","“Look up again” button for jobs and workers marked in orange."]},
  {v:"2026.11.09-h",date:"Nov 9, 2026",added:["Warning when a typed address lands in the wrong place: the map found a different town than the one you typed, only the town center (not the street), or a spot far from all your workers.","Jobs and workers with a location that looks off are marked in orange, listed at the top of the Today tab, and flagged on the crews, with how to paste the exact spot from Google Maps."]},
  {v:"2026.11.09-g",date:"Nov 9, 2026",fixed:["Opening a backup file with Workers → Import list now restores it properly. Before, it turned every line of the backup into a fake “worker” (like “{” or “name: …”) and the real people didn't come in.","Restoring a backup also clears out those fake rows if an earlier import left them behind.","Opening a backup file in the Today tab now says to use Restore backup instead of making junk jobs."]},
@@ -437,12 +438,18 @@ async function readAnyFile(file){
   if(n.endsWith(".zip")){
     if(!window.JSZip)throw new Error("Couldn't open the .zip here. Unzip it first and open the .ics file inside.");
     const zip=await JSZip.loadAsync(file);
+    const td=Object.values(zip.files).find(f=>/(^|\/)today\.json$/i.test(f.name)&&!f.dir);
+    if(td){const rb=Object.values(zip.files).find(f=>/(^|\/)roster-backup\.json$/i.test(f.name)&&!f.dir);
+      return {kind:"pack",text:await td.async("string"),roster:rb?await rb.async("string"):""}}
     const ics=Object.values(zip.files).filter(f=>/\.ics$/i.test(f.name)&&!f.dir);
     if(!ics.length)throw new Error("No calendar (.ics) file inside that zip.");
     const texts=await Promise.all(ics.map(f=>f.async("string")));
     return {kind:"ics",text:texts.join("\n")};
   }
   const text=await file.text();
+  const js=asJSON(text);
+  if(js&&js.kind==="support-pack"&&js.files&&js.files["today.json"])return {kind:"pack",text:js.files["today.json"],roster:js.files["roster-backup.json"]||""};
+  if(js&&Array.isArray(js.jobs)&&("assign" in js||"off" in js||"locks" in js))return {kind:"pack",text,roster:""};
   if(n.endsWith(".kml")||/<kml[\s>]/i.test(text.slice(0,500)))return {kind:"kml",text};
   if(n.endsWith(".ics")||/BEGIN:VCALENDAR/.test(text.slice(0,200)))return {kind:"ics",text};
   return {kind:"csv",text};
@@ -2019,7 +2026,7 @@ This contains names, addresses and phone numbers. Only share it with someone you
   const files={
     "README.txt":readme,
     "roster-backup.json":rosterBackup(),
-    "today.json":JSON.stringify(tonight,null,1),
+    "today.json":JSON.stringify({...tonight,names:Object.fromEntries(roster.workers.map(w=>[w.id,w.name]))},null,1),
     "history-last-60-days.json":JSON.stringify([...HIST.values()].filter(r=>r.date>=dayKey(new Date(Date.now()-60*864e5))),null,1),
     "last-import.json":JSON.stringify(lastImport,null,1),
     "schedule.txt":tonight.assign?scheduleText():"Crews not built yet.",
@@ -2111,6 +2118,40 @@ function restoreDialog(){
   document.body.appendChild(bg);
   bg.querySelector("#rsFile").addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;const t=await f.text();bg.remove();restoreRoster(t)});
   bg.addEventListener("click",e=>{const r=e.target.dataset.r;if(!r)return;const t=bg.querySelector("#rsTxt").value.trim();if(r==="o"&&!t){toast("Paste the backup text first");return}bg.remove();if(r==="o")restoreRoster(t)});
+}
+
+/* ---------- load jobs from a support pack (Today → Open job file) ----------
+   Brings back each job as it was: time, address, map spot, trucks, crew size, requested / don't-send people,
+   notes and who's off. Offers to load the pack's workers too. People are matched by id, then by name. */
+async function loadPackJobs(text,rosterText,source){
+  let d;try{d=JSON.parse(String(text||"").replace(/^\uFEFF/,""))}catch(e){throw new Error("Couldn't read the jobs in that pack.")}
+  if(!d||!Array.isArray(d.jobs))throw new Error("Couldn't read the jobs in that pack.");
+  if(!d.jobs.length)throw new Error("That pack has no jobs in it.");
+  let rb=null;try{if(rosterText)rb=readBackup(rosterText)}catch(e){}
+  if(rb&&rb.workers.length){
+    const r=await ask(`This pack also has ${rb.workers.length} worker${rb.workers.length===1?"":"s"} and crew rules. Load them too?`,"Load workers too","Jobs only");
+    if(r===null)return;
+    if(r)await restoreRoster(rosterText);
+  }
+  if(tonight.jobs.length&&!await ask(`Replace today's ${tonight.jobs.length} job(s) with the ${d.jobs.length} from this pack?`,"Replace"))return;
+  const names=d.names&&typeof d.names==="object"?d.names:{};
+  const ids=a=>[...new Set((Array.isArray(a)?a:[]).map(id=>{id=String(id);if(wById(id))return id;
+    const n=String(names[id]||"").trim().toLowerCase();const w=n&&roster.workers.find(x=>x.name.trim().toLowerCase()===n);return w?w.id:null}).filter(Boolean))];
+  const str=(v,n)=>String(v??"").slice(0,n);const num=v=>typeof v==="number"&&isFinite(v)?v:(v!=null&&v!==""&&isFinite(+v)?+v:null);
+  let lostPeople=0;
+  tonight.jobs=d.jobs.filter(j=>j&&typeof j==="object").map(j=>{
+    const lat=num(j.lat),lng=num(j.lng),ok=lat!=null&&lng!=null&&Math.abs(lat)<=90&&Math.abs(lng)<=180;
+    const req=ids(j.requested),av=ids(j.avoid);lostPeople+=(Array.isArray(j.requested)?j.requested.length:0)-req.length+(Array.isArray(j.avoid)?j.avoid.length:0)-av.length;
+    return {id:str(j.id,40)||uid(),name:str(j.name,300)||"Job",title:str(j.title,500),time:str(j.time,20),day:str(j.day,20),address:str(j.address,300),place:str(j.place,200),
+      lat:ok?lat:null,lng:ok?lng:null,geoNote:str(j.geoNote,200),geoLabel:str(j.geoLabel,300),desc:str(j.desc,1500),folder:str(j.folder,200),
+      crew:Math.max(1,Math.min(20,j.crew|0||S().defaultCrew)),trucks:Math.max(1,Math.min(20,j.trucks|0||1)),requested:req,avoid:av,aiNote:str(j.aiNote,500),on:j.on!==false};
+  });
+  tonight.off=ids(d.off);tonight.assign=null;tonight.locks={};tonight.meets={};delete tonight.aiReview;
+  tonight.importedAt=new Date().toISOString();tonight.source=source;
+  logEvent("import",`pack jobs from ${source}: ${tonight.jobs.length} jobs`);
+  save("tonight");tab="tonight";render();
+  toast(`${tonight.jobs.length} job(s) loaded from the pack${lostPeople?` · ${lostPeople} requested/don't-send name(s) not found in your workers`:""} — press Build crews`);
+  if(tonight.jobs.some(j=>!hasLoc(j)&&(j.address||j.place)))geocodeMissing("jobs");
 }
 
 /* ---------- sample data ---------- */
@@ -2305,7 +2346,9 @@ document.addEventListener("change",e=>{
 });
 $("#fileJobs").addEventListener("change",async e=>{
   const f=e.target.files[0];if(!f)return;
-  try{const {kind,text}=await readAnyFile(f);rawImportText=kind==="ics"?"":text;const p=placesFrom(kind,text);if(!p.length)throw new Error("No jobs found in that file.");await importPlaces(kind,p,f.name)}catch(err){logEvent("import-error",(err.message||err)+" — "+f.name);toast(err.message||"Couldn't read that file")}
+  try{const {kind,text,roster:rt}=await readAnyFile(f);
+    if(kind==="pack"){await loadPackJobs(text,rt,f.name);return}
+    rawImportText=kind==="ics"?"":text;const p=placesFrom(kind,text);if(!p.length)throw new Error("No jobs found in that file.");await importPlaces(kind,p,f.name)}catch(err){logEvent("import-error",(err.message||err)+" — "+f.name);toast(err.message||"Couldn't read that file")}
 });
 $("#fileWorkers").addEventListener("change",async e=>{
   const f=e.target.files[0];if(!f)return;

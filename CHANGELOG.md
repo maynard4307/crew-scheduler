@@ -2,6 +2,11 @@
 
 Tap the version number at the top of the app to see this inside Crew Scheduler.
 
+## 2026.11.09-j — Nov 9, 2026
+
+**New**
+- Load jobs from a support pack: Today → Open job file, pick the pack (.zip). The jobs come back as they were — report times, addresses, map spots, trucks, crew sizes, requested and don't-send people, notes and who's off. It also offers to load the pack's workers.
+
 ## 2026.11.09-i — Nov 9, 2026
 
 **New**
