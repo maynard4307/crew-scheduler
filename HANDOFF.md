@@ -4,7 +4,7 @@
 
 - Live app: https://maynard4307.github.io/crew-scheduler/
 - Repository: https://github.com/maynard4307/crew-scheduler (public; GitHub Pages from `main`, root)
-- Current version: **2026.11.09-f** (shown in the app's top bar; tap it for What's new)
+- Current version: **2026.11.09-g** (shown in the app's top bar; tap it for What's new)
 - Owner: maynard4307 · Primary user: the owner's brother (dispatcher, iPhone + PC)
 
 ## 1. What it's for
@@ -73,7 +73,7 @@ On the Claude artifact the roster/today also sync through the artifact database 
 - Output: `rResults`, `scheduleText`, `scheduleCSV`, `rMap`
 - History: `saveDayToHistory`, `histEdit`, `rHistory`, `rHistDay`, `rHistSearch`, `historyCSV`, `fileConnect`/`fileSync`, `mergeHistory`
 - AI: `askClaude`, `aiReadNotes`, `aiReview`, `applySuggestion`
-- Backup/support: `rosterBackup`, `readBackup`, `restoreRoster`, `supportPack`, `logEvent`
+- Backup/support: `rosterBackup`, `readBackup`, `restoreRoster`, `supportPack`, `logEvent`. A backup `.json` opened through Workers → Import list is detected (`asJSON`, `isBackupJSON`) and sent to `restoreRoster`; JSON never goes through the CSV reader (`placesFrom` refuses it). `restoreRoster` also removes leftover junk rows (`isJunkWorker`) from the pre-g bug.
 - Release notes: `APP_VERSION`, `CHANGELOG` (top of the script)
 
 ## 5. How to ship an update
@@ -92,6 +92,7 @@ Never commit backups, support packs, CSVs or keys (`.gitignore` blocks `*.json`,
 - Ask for **Crew rules → Pack & save for support** (.zip). It has the roster, today, last import (raw calendar text), schedule, issues, 60 days of history, the log, and environment (version, where it runs, whether routing/AI keys are set, cached route counts, last routing error).
 - Road times "not used": check `environment.json` → `routingConfigured`, `routeCached`, `routeLastErr`. OpenRouteService's usage dashboard can lag.
 - Calendar parsing problems: check `last-import.json` raw events against `parseJobTitle`.
+- Workers named `{`, `]`, `name: …`, `lat: …` with no address: a backup `.json` was opened with Import list in a version before 2026.11.09-g. Fix: update, then Restore backup (or Import list) with the same file → Replace.
 
 ## 7. Known limits
 
@@ -122,3 +123,4 @@ Never commit backups, support packs, CSVs or keys (`.gitignore` blocks `*.json`,
 | Nov 9, 2026 | Real road times via OpenRouteService (free); arrive 15 min early, 5 min per stop, both adjustable |
 | Nov 9, 2026 | Pickup decided by extra minutes for the lead (≤ 10, adjustable), not miles from the route |
 | Nov 9, 2026 | If meeting the truck barely beats driving to the job, worker drives to the job |
+| Nov 9, 2026 | Backup files opened with Import list are restored as backups (not read as CSV); older backups (version 2, `pickupMiles` setting) still load |

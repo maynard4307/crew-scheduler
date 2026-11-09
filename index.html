@@ -106,14 +106,15 @@ code{background:var(--chip);padding:1px 5px;border-radius:5px;font-size:13px;ove
 </header>
 <main id="app"></main>
 <input type="file" id="fileJobs" accept=".kml,.kmz,.csv,.ics,.txt,application/vnd.google-earth.kml+xml" class="hide">
-<input type="file" id="fileWorkers" accept=".kml,.kmz,.csv,.txt" class="hide">
+<input type="file" id="fileWorkers" accept=".kml,.kmz,.csv,.txt,.json,application/json" class="hide">
 
 <script>
 "use strict";
 /* ---------- state ---------- */
-const APP_VERSION="2026.11.09-f";
+const APP_VERSION="2026.11.09-g";
 /* Release notes — newest first. Add an entry here with every update. */
 const CHANGELOG=[
+ {v:"2026.11.09-g",date:"Nov 9, 2026",fixed:["Opening a backup file with Workers → Import list now restores it properly. Before, it turned every line of the backup into a fake “worker” (like “{” or “name: …”) and the real people didn't come in.","Restoring a backup also clears out those fake rows if an earlier import left them behind.","Opening a backup file in the Today tab now says to use Restore backup instead of making junk jobs."]},
  {v:"2026.11.09-f",date:"Nov 9, 2026",fixed:["A worker whose meet point would be basically at the job site (or barely closer than the job) is now told to drive straight to the job instead."]},
  {v:"2026.11.09-e",date:"Nov 9, 2026",added:["Pickups are now decided by time: a lead picks a worker up at home if it adds no more than 10 minutes to the drive (adjustable); otherwise the worker meets the truck along the way.","Real road drive times (free OpenRouteService key, set in Crew rules): matching, pickups and meet points now follow actual roads and minutes, not straight lines.","Leave-by times for everyone: when each lead leaves home, when each pickup should be ready, and when each worker leaves to meet the truck.","Arrive-early buffer (15 min) and minutes per pickup or meet stop (5 min) — both adjustable in Crew rules.","Without a routing key, times are estimated (shown with ≈) at an adjustable average speed."]},
  {v:"2026.11.09-d",date:"Nov 9, 2026",added:["New History tab: every day's schedule is saved when you copy or send it — who was on each truck, for which job.","Close out each job the next morning: Completed, Rained out or Cancelled, with a note and crew changes (sent home, no-show, swapped in).","Month calendar with colored dots, a search box (person, client or town) and spreadsheet export for any date range.","On a PC (Chrome or Edge): connect a history file once and it's kept up to date automatically.","History is included in backups and kept forever."]},
@@ -408,7 +409,16 @@ async function readAnyFile(file){
   if(n.endsWith(".ics")||/BEGIN:VCALENDAR/.test(text.slice(0,200)))return {kind:"ics",text};
   return {kind:"csv",text};
 }
+/* A .json file (a backup or support-pack file) must never go through the CSV reader: it would turn every
+   line of the file into a "worker" or "job". Returns the parsed JSON, or null if the text isn't JSON. */
+function asJSON(text){
+  const t=String(text||"").replace(/^\uFEFF/,"").trim();
+  if(!/^[\[{]/.test(t))return null;
+  try{return JSON.parse(t)}catch(e){return null}
+}
+const isBackupJSON=d=>!!d&&typeof d==="object"&&(Array.isArray(d.roster&&d.roster.workers)||Array.isArray(d.workers));
 function placesFrom(kind,text){
+  if(asJSON(text))throw new Error("That's a backup (.json) file, not a list. Use Workers → Restore backup to load it.");
   if(kind==="kml")return parseKML(text);
   if(kind==="ics")return parseICS(text);
   if(kind==="titles")return parseTitleLines(text);
@@ -1926,7 +1936,7 @@ function workersCSV(){
   return rows.map(r=>r.map(q).join(",")).join("\n");
 }
 function readBackup(text){
-  let d;try{d=JSON.parse(text)}catch(e){throw new Error("That isn't a Crew Scheduler backup.")}
+  let d;try{d=JSON.parse(String(text||"").replace(/^\uFEFF/,"").trim())}catch(e){throw new Error("That isn't a Crew Scheduler backup.")}
   const r=d&&(d.roster||(Array.isArray(d.workers)?d:null));
   if(!r||!Array.isArray(r.workers))throw new Error("That isn't a Crew Scheduler backup.");
   const clean=w=>({id:String(w.id||uid()),name:String(w.name||"Unnamed").slice(0,80),address:String(w.address||"").slice(0,200),
@@ -1935,8 +1945,20 @@ function readBackup(text){
   const pairs=a=>Array.isArray(a)?a.filter(p=>Array.isArray(p)&&p.length===2).map(p=>[String(p[0]),String(p[1])]):[];
   return {workers:r.workers.map(clean),conflicts:pairs(r.conflicts),prefers:pairs(r.prefers),settings:r.settings&&typeof r.settings==="object"?r.settings:null,historyDays:d.history&&Array.isArray(d.history.days)?d.history.days:[]};
 }
+/* Rows left behind when a backup .json was opened with "Import list (CSV)" before 2026.11.09-g:
+   names like "{", "]", "name: Curtis danley", "lat: 35.03", "roster: {". */
+const JUNK_ROW=/^[\[\]{}(),\s]*$|^"?[A-Za-z]+"?\s*:(\s|$)/;
+const isJunkWorker=w=>JUNK_ROW.test(String(w.name||"").trim())&&!w.address&&!hasLoc(w);
 async function restoreRoster(text){
-  let b;try{b=readBackup(text)}catch(e){toast(e.message);return}
+  let b;try{b=readBackup(text)}catch(e){logEvent("restore-error",e.message);toast(e.message);return}
+  const junk=roster.workers.filter(isJunkWorker);
+  if(junk.length){
+    const ids=new Set(junk.map(w=>w.id));
+    roster.workers=roster.workers.filter(w=>!ids.has(w.id));
+    roster.conflicts=roster.conflicts.filter(p=>!ids.has(p[0])&&!ids.has(p[1]));roster.prefers=roster.prefers.filter(p=>!ids.has(p[0])&&!ids.has(p[1]));
+    logEvent("restore",`Removed ${junk.length} broken rows from an earlier backup import`);
+    save("roster");render();
+  }
   const mode=roster.workers.length?await ask(`This backup has ${b.workers.length} worker${b.workers.length===1?"":"s"}. Replace everyone on this device with it, or merge (add new people, update people with the same name)?`,"Replace","Merge"):true;
   if(mode===null)return;
   if(mode){
@@ -2144,8 +2166,10 @@ $("#fileJobs").addEventListener("change",async e=>{
 });
 $("#fileWorkers").addEventListener("change",async e=>{
   const f=e.target.files[0];if(!f)return;
-  try{const {kind,text}=await readAnyFile(f);const p=placesFrom(kind,text).filter(x=>x.name&&x.name!=="Unnamed");if(!p.length)throw new Error("No people found in that file.");
-    p.forEach(x=>{if(!x.address&&x.desc)x.address=x.desc.split("\n")[0].slice(0,120)});importWorkers(p)}catch(err){toast(err.message||"Couldn't read that file")}
+  try{const {kind,text}=await readAnyFile(f);
+    if(isBackupJSON(asJSON(text))){logEvent("import","Backup file opened with Import list — restoring it: "+f.name);restoreRoster(text);return}
+    const p=placesFrom(kind,text).filter(x=>x.name&&x.name!=="Unnamed");if(!p.length)throw new Error("No people found in that file.");
+    p.forEach(x=>{if(!x.address&&x.desc)x.address=x.desc.split("\n")[0].slice(0,120)});importWorkers(p)}catch(err){logEvent("import-error",(err.message||err)+" — "+f.name);toast(err.message||"Couldn't read that file")}
 });
 
 $("#appVer").textContent="v"+APP_VERSION;
