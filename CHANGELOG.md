@@ -1,0 +1,79 @@
+# Changelog
+
+Tap the version number at the top of the app to see this inside Crew Scheduler.
+
+## 2026.11.09-b — Nov 9, 2026
+
+**New**
+- What's new: tap the version number at the top to see what changed. It also pops up once after each update.
+
+## 2026.11.09-a — Nov 9, 2026
+
+**New**
+- Version number shown in the top bar on every screen.
+- Separate delete choices in Crew rules → Delete data: today's crews, today's jobs & crews, all workers & crew rules, or everything.
+- “Delete all workers…” on the Workers tab, with a “Save backup first” option.
+
+## 2026.11.08-ai1 — Nov 8, 2026
+
+**New**
+- AI assistant (optional, needs a Claude API key): “Read job notes with AI” pulls trucks, crew size, requested and “don't send” people and key notes from calendar text.
+- “Review with AI” checks the built crews, takes today's special instructions, and suggests fixes you can apply with one tap.
+- “Don't send” list per job — those people are never put on that job.
+
+**Fixed**
+- Calendar notes are now kept in full (up to 1,500 characters) so nothing important is cut off.
+
+## 2026.11.07-g — Nov 7, 2026
+
+**New**
+- Max distance from a crew lead's home to the job, with an optional limit per lead.
+- “Pack & save for support”: one .zip with everything needed to troubleshoot a problem.
+- A log of recent errors and actions, included in support packs.
+
+**Fixed**
+- Checkbox labels no longer wrap onto their own line on phones.
+
+## 2026.11.07-c — Nov 7, 2026
+
+**New**
+- Requested crew: people named in a calendar event (e.g. “Req: Marcus, Lena”) are put on that job automatically. You can also pick them by hand.
+- Option to include store & gas station lots (Walmart, Food Lion…) as meet spots, marked with a towing warning.
+
+## 2026.11.07-b — Nov 7, 2026
+
+**New**
+- Workers are picked up at home if they live on the lead's way to the job, or meet the truck along the route.
+- Workers are matched to the lead whose route passes closest to them.
+- Optional meet spots: finds Park & Ride lots and public parking near the route.
+- Schedule shows each worker's pickup or meet spot with a map link.
+
+## 2026.11.07-a — Nov 7, 2026
+
+**New**
+- Backup & restore of all workers, leads and crew rules — move them to another phone or a newer version.
+- Merge or replace when restoring.
+- Export workers as a spreadsheet (CSV).
+
+**Fixed**
+- Saving files now works in the downloaded/website version (it used to only show text to copy).
+
+## 2026.11.06 — Nov 6, 2026
+
+**New**
+- Every truck gets exactly one crew lead (they have the company truck), then workers.
+- Jobs can need several trucks; set Trucks and People per truck on each job.
+- Truck counts like “2 trucks” or “3 man crew” are read from the calendar.
+- “Tonight” renamed to “Today”; calendar import picks today's jobs by default.
+
+## 2026.11.03-b — Nov 3, 2026
+
+**New**
+- Import jobs from the Google Calendar export (.ics or .zip), choosing the day.
+- Reads titles like “7a-Lee Electric/Cameron Epps-Raeford, NC” into time, job and town; skips headings like “***Fayetteville Schedule***”.
+- Finds job towns and worker home addresses on the map automatically.
+
+## 2026.11.03 — Nov 3, 2026
+
+**New**
+- First version: workers with home locations, “can't work together” and “work well together” rules, build crews by distance, copy or download the schedule.

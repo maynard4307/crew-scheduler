@@ -20,7 +20,10 @@ body{margin:0;font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
 header{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line)}
 .top{display:flex;align-items:center;justify-content:space-between;padding:10px 14px 4px;max-width:980px;margin:0 auto}
 h1{font-size:18px;margin:0}
-.ver{font-size:11px;font-weight:500;color:var(--muted);margin-left:4px;white-space:nowrap}
+.ver{font:inherit;font-size:11px;font-weight:500;color:var(--accent);margin-left:4px;white-space:nowrap;background:none;border:1px solid var(--line);border-radius:999px;padding:2px 8px;cursor:pointer;vertical-align:2px}
+.ver.new::after{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--bad);margin-left:5px;vertical-align:1px}
+.rel h3{margin:14px 0 2px;font-size:15px}.rel ul{margin:4px 0 0;padding-left:20px}.rel li{margin:3px 0;font-size:14px}
+.rel .lbl{font-size:12px;font-weight:700;margin-top:6px}
 #saveState{font-size:12px;color:var(--muted)}
 nav{display:flex;gap:2px;padding:0 8px;max-width:980px;margin:0 auto;overflow-x:auto}
 nav button{flex:1;min-width:max-content;background:none;border:0;border-bottom:3px solid transparent;padding:10px 12px;font:inherit;color:var(--muted);cursor:pointer}
@@ -80,7 +83,7 @@ code{background:var(--chip);padding:1px 5px;border-radius:5px;font-size:13px;ove
 </head>
 <body>
 <header>
-  <div class="top"><h1>Crew Scheduler <span id="appVer" class="ver"></span></h1><span id="saveState">Loading…</span></div>
+  <div class="top"><h1>Crew Scheduler <button id="appVer" class="ver" data-act="whatsNew" title="What's new"></button></h1><span id="saveState">Loading…</span></div>
   <nav id="tabs">
     <button data-tab="tonight" class="on">Today</button>
     <button data-tab="workers">Workers</button>
@@ -95,7 +98,21 @@ code{background:var(--chip);padding:1px 5px;border-radius:5px;font-size:13px;ove
 <script>
 "use strict";
 /* ---------- state ---------- */
-const APP_VERSION="2026.11.09-a";
+const APP_VERSION="2026.11.09-b";
+/* Release notes — newest first. Add an entry here with every update. */
+const CHANGELOG=[
+ {v:"2026.11.09-b",date:"Nov 9, 2026",added:["What's new: tap the version number at the top to see what changed. It also pops up once after each update."]},
+ {v:"2026.11.09-a",date:"Nov 9, 2026",added:["Version number shown in the top bar on every screen.","Separate delete choices in Crew rules → Delete data: today's crews, today's jobs & crews, all workers & crew rules, or everything.","“Delete all workers…” on the Workers tab, with a “Save backup first” option."]},
+ {v:"2026.11.08-ai1",date:"Nov 8, 2026",added:["AI assistant (optional, needs a Claude API key): “Read job notes with AI” pulls trucks, crew size, requested and “don't send” people and key notes from calendar text.","“Review with AI” checks the built crews, takes today's special instructions, and suggests fixes you can apply with one tap.","“Don't send” list per job — those people are never put on that job."],fixed:["Calendar notes are now kept in full (up to 1,500 characters) so nothing important is cut off."]},
+ {v:"2026.11.07-g",date:"Nov 7, 2026",added:["Max distance from a crew lead's home to the job, with an optional limit per lead.","“Pack & save for support”: one .zip with everything needed to troubleshoot a problem.","A log of recent errors and actions, included in support packs."],fixed:["Checkbox labels no longer wrap onto their own line on phones."]},
+ {v:"2026.11.07-c",date:"Nov 7, 2026",added:["Requested crew: people named in a calendar event (e.g. “Req: Marcus, Lena”) are put on that job automatically. You can also pick them by hand.","Option to include store & gas station lots (Walmart, Food Lion…) as meet spots, marked with a towing warning."]},
+ {v:"2026.11.07-b",date:"Nov 7, 2026",added:["Workers are picked up at home if they live on the lead's way to the job, or meet the truck along the route.","Workers are matched to the lead whose route passes closest to them.","Optional meet spots: finds Park & Ride lots and public parking near the route.","Schedule shows each worker's pickup or meet spot with a map link."]},
+ {v:"2026.11.07-a",date:"Nov 7, 2026",added:["Backup & restore of all workers, leads and crew rules — move them to another phone or a newer version.","Merge or replace when restoring.","Export workers as a spreadsheet (CSV)."],fixed:["Saving files now works in the downloaded/website version (it used to only show text to copy)."]},
+ {v:"2026.11.06",date:"Nov 6, 2026",added:["Every truck gets exactly one crew lead (they have the company truck), then workers.","Jobs can need several trucks; set Trucks and People per truck on each job.","Truck counts like “2 trucks” or “3 man crew” are read from the calendar.","“Tonight” renamed to “Today”; calendar import picks today's jobs by default."]},
+ {v:"2026.11.03-b",date:"Nov 3, 2026",added:["Import jobs from the Google Calendar export (.ics or .zip), choosing the day.","Reads titles like “7a-Lee Electric/Cameron Epps-Raeford, NC” into time, job and town; skips headings like “***Fayetteville Schedule***”.","Finds job towns and worker home addresses on the map automatically."]},
+ {v:"2026.11.03",date:"Nov 3, 2026",added:["First version: workers with home locations, “can't work together” and “work well together” rules, build crews by distance, copy or download the schedule."]},
+];
+
 /* Small rolling log of errors and key actions, kept on this device for support packs. */
 const LOG=(()=>{try{return JSON.parse(localStorage.getItem("crew_log"))||[]}catch(e){return []}})();
 function logEvent(type,msg,extra){
@@ -1089,6 +1106,7 @@ function rHelp(){
   <div class="card"><h2>Workers' home locations (one time)</h2>
   <p class="small">Add each worker with their home address and tap <b>Find from address</b>. It looks the address up on OpenStreetMap, which needs an internet connection. To add many at once, use <b>Import list</b> with a CSV that has the columns <code>Name, Address, Phone, Lead</code>; their locations are looked up automatically.</p>
   <p class="small">If a lookup lands in the wrong spot, long-press the house in Google Maps (phone) or right-click it (computer), copy the two numbers, and paste them into the worker's location box.</p></div>
+  <div class="card" id="relCard" style="order:99"><h2>What's new — release history</h2><p class="small muted" style="margin:0">Tap the version number at the top of any screen to see the latest changes.</p>${relHTML(CHANGELOG)}</div>
   <div class="card"><h2>🤖 AI assistant (optional)</h2><p class="small">With a Claude API key saved under <b>Crew rules → AI assistant</b>: <b>Read job notes with AI</b> pulls trucks, crew size, requested and “don't send” people and important notes out of messy calendar text. After building crews, <b>Review with AI</b> looks for problems and better swaps — type anything special for today (who has to leave early, who to keep off a job) and it takes that into account. Each suggestion has an <b>Apply</b> button; applied people are locked 🔒 so a rebuild keeps them. Only names, jobs, distances and rules are sent — never addresses or phone numbers.</p></div>
   <div class="card"><h2>Having a problem?</h2><p class="small">Go to <b>Crew rules → Pack &amp; save for support</b>. It saves one .zip file with all workers, crew rules, today's jobs, the last calendar import, the crews and a log of recent errors. Send that file along with a note of what went wrong. It contains names, addresses and phone numbers, so only send it to someone you trust.</p></div>
   <div class="card"><h2>How the matching works</h2><p class="small">Each crew lead drives the company truck from their home to the job, and the job's distance is measured from the lead's home. Workers join the truck along the way. If a worker lives on or near the lead's route (within ${S().pickupMiles} mi, set in Crew rules), the lead picks them up at home. Otherwise the worker drives to a point on the lead's route and leaves their car there. So the tool pairs each worker with the lead whose route passes closest to their home, and fills lead spots first, then worker spots.</p>
@@ -1327,6 +1345,25 @@ function rAISettings(){
   <div class="row" style="margin-top:10px"><button class="b p" data-act="aiSave">Save</button><button class="b" data-act="aiTest" ${c.key?"":"disabled"}>Test</button>${c.key?`<button class="b" data-act="aiRemove" style="color:var(--bad)">Remove key</button>`:""}</div>
   <p class="small muted" style="margin-bottom:0">AI sends worker names, lead status, job titles/notes, distances and crew rules to Anthropic. Home addresses, phone numbers and map locations are never sent. AI features work on the website version (not on the shared Claude page).</p></div>`;
 }
+/* ---------- what's new ---------- */
+function relHTML(list){
+  return `<div class="rel">`+list.map(r=>`<h3>${esc(r.v)}${r.v===APP_VERSION?` <span class="tag lead">this version</span>`:""} <span class="small muted" style="font-weight:400">· ${esc(r.date)}</span></h3>
+    ${r.added&&r.added.length?`<div class="lbl" style="color:var(--ok)">New</div><ul>${r.added.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:""}
+    ${r.fixed&&r.fixed.length?`<div class="lbl" style="color:var(--accent)">Fixed</div><ul>${r.fixed.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:""}`).join("")+`</div>`;
+}
+function showWhatsNew(sinceV){
+  // show releases newer than the one this device last saw (or the latest 3)
+  let list=CHANGELOG;
+  const idx=sinceV?CHANGELOG.findIndex(r=>r.v===sinceV):-1;
+  list=idx>0?CHANGELOG.slice(0,idx):CHANGELOG.slice(0,3);
+  const bg=document.createElement("div");bg.className="modalbg";
+  bg.innerHTML=`<div class="modal" style="max-height:85vh;overflow:auto"><h2 style="margin:0 0 4px;font-size:18px">What's new</h2><p class="small muted" style="margin:0">You're on version ${esc(APP_VERSION)}.</p>${relHTML(list)}
+    <div class="row" style="justify-content:space-between;margin-top:14px"><a href="#" class="small" data-r="all">See full history</a><button class="b p" data-r="c">Got it</button></div></div>`;
+  bg.addEventListener("click",e=>{const r=e.target.closest("[data-r]")?.dataset.r;if(!r&&e.target!==bg)return;if(e.target.tagName==="A")e.preventDefault();bg.remove();if(r==="all"){tab="help";render();setTimeout(()=>$("#relCard")?.scrollIntoView({block:"start"}),0)}});
+  document.body.appendChild(bg);
+  try{localStorage.setItem("crew_seenver",APP_VERSION)}catch(e){}
+  $("#appVer").classList.remove("new");
+}
 /* ---------- support pack ---------- */
 async function supportPack(){
   const now=new Date(),stamp=now.toISOString().slice(0,16).replace(/[T:]/g,"-");
@@ -1542,6 +1579,7 @@ document.addEventListener("click",async e=>{
       const other=k==="c"?roster.prefers:roster.conflicts;const oi=other.findIndex(p=>pairKey(p[0],p[1])===pairKey(A,B));if(oi>=0)other.splice(oi,1);
       arr.push([A,B]);save("roster");render();break;}
     case "delPair":{const arr=el.dataset.k==="c"?roster.conflicts:roster.prefers;arr.splice(+el.dataset.i,1);save("roster");render();break;}
+    case "whatsNew":showWhatsNew(null);break;
     case "goAI":tab="rules";render();setTimeout(()=>$("#aiCard")?.scrollIntoView({block:"start"}),0);break;
     case "aiSave":{const c=aiCfg();const k=$("#aiKey").value.trim();if(k)c.key=k;c.model=$("#aiModel").value;c.autoNotes=$("#aiAuto").checked;
       if(!c.key){toast("Paste your API key first");return}aiSet(c);logEvent("ai-setup","saved settings");render();toast("AI settings saved on this device");break;}
@@ -1579,6 +1617,13 @@ $("#fileWorkers").addEventListener("change",async e=>{
 });
 
 $("#appVer").textContent="v"+APP_VERSION;
+(()=>{let seen=null;try{seen=localStorage.getItem("crew_seenver")}catch(e){}
+  if(seen===APP_VERSION)return;
+  const firstRun=!seen&&!(lsGet("crew_roster")||{}).workers?.length;
+  if(firstRun){try{localStorage.setItem("crew_seenver",APP_VERSION)}catch(e){}return}  // brand-new user: no popup
+  $("#appVer").classList.add("new");
+  setTimeout(()=>showWhatsNew(seen),600);
+})();
 render();
 initDB();
 </script>
