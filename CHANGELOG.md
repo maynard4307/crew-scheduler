@@ -2,6 +2,13 @@
 
 Tap the version number at the top of the app to see this inside Crew Scheduler.
 
+## 2026.11.09-g — Nov 9, 2026
+
+**Fixed**
+- Opening a backup file with Workers → Import list now restores it properly. Before, it turned every line of the backup into a fake “worker” (like “{” or “name: …”) and the real people didn't come in.
+- Restoring a backup also clears out those fake rows if an earlier import left them behind.
+- Opening a backup file in the Today tab now says to use Restore backup instead of making junk jobs.
+
 ## 2026.11.09-f — Nov 9, 2026
 
 **Fixed**
