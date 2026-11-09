@@ -2,6 +2,15 @@
 
 Tap the version number at the top of the app to see this inside Crew Scheduler.
 
+## 2026.11.09-e — Nov 9, 2026
+
+**New**
+- Pickups are now decided by time: a lead picks a worker up at home if it adds no more than 10 minutes to the drive (adjustable); otherwise the worker meets the truck along the way.
+- Real road drive times (free OpenRouteService key, set in Crew rules): matching, pickups and meet points now follow actual roads and minutes, not straight lines.
+- Leave-by times for everyone: when each lead leaves home, when each pickup should be ready, and when each worker leaves to meet the truck.
+- Arrive-early buffer (15 min) and minutes per pickup or meet stop (5 min) — both adjustable in Crew rules.
+- Without a routing key, times are estimated (shown with ≈) at an adjustable average speed.
+
 ## 2026.11.09-d — Nov 9, 2026
 
 **New**
