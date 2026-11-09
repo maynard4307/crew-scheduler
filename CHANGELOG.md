@@ -2,6 +2,12 @@
 
 Tap the version number at the top of the app to see this inside Crew Scheduler.
 
+## 2026.11.09-h — Nov 9, 2026
+
+**New**
+- Warning when a typed address lands in the wrong place: the map found a different town than the one you typed, only the town center (not the street), or a spot far from all your workers.
+- Jobs and workers with a location that looks off are marked in orange, listed at the top of the Today tab, and flagged on the crews, with how to paste the exact spot from Google Maps.
+
 ## 2026.11.09-g — Nov 9, 2026
 
 **Fixed**
