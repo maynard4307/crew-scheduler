@@ -2,6 +2,11 @@
 
 Tap the version number at the top of the app to see this inside Crew Scheduler.
 
+## 2026.11.09-f — Nov 9, 2026
+
+**Fixed**
+- A worker whose meet point would be basically at the job site (or barely closer than the job) is now told to drive straight to the job instead.
+
 ## 2026.11.09-e — Nov 9, 2026
 
 **New**

@@ -111,9 +111,10 @@ code{background:var(--chip);padding:1px 5px;border-radius:5px;font-size:13px;ove
 <script>
 "use strict";
 /* ---------- state ---------- */
-const APP_VERSION="2026.11.09-e";
+const APP_VERSION="2026.11.09-f";
 /* Release notes — newest first. Add an entry here with every update. */
 const CHANGELOG=[
+ {v:"2026.11.09-f",date:"Nov 9, 2026",fixed:["A worker whose meet point would be basically at the job site (or barely closer than the job) is now told to drive straight to the job instead."]},
  {v:"2026.11.09-e",date:"Nov 9, 2026",added:["Pickups are now decided by time: a lead picks a worker up at home if it adds no more than 10 minutes to the drive (adjustable); otherwise the worker meets the truck along the way.","Real road drive times (free OpenRouteService key, set in Crew rules): matching, pickups and meet points now follow actual roads and minutes, not straight lines.","Leave-by times for everyone: when each lead leaves home, when each pickup should be ready, and when each worker leaves to meet the truck.","Arrive-early buffer (15 min) and minutes per pickup or meet stop (5 min) — both adjustable in Crew rules.","Without a routing key, times are estimated (shown with ≈) at an adjustable average speed."]},
  {v:"2026.11.09-d",date:"Nov 9, 2026",added:["New History tab: every day's schedule is saved when you copy or send it — who was on each truck, for which job.","Close out each job the next morning: Completed, Rained out or Cancelled, with a note and crew changes (sent home, no-show, swapped in).","Month calendar with colored dots, a search box (person, client or town) and spreadsheet export for any date range.","On a PC (Chrome or Edge): connect a history file once and it's kept up to date automatically.","History is included in backups and kept forever."]},
  {v:"2026.11.09-c",date:"Nov 9, 2026",added:["“Download this app” button (How to tab and Crew rules) on the website version: saves a copy you can open on a computer without internet setup, named with its version number."]},
@@ -975,6 +976,8 @@ function legFor(j,w,truck){
   if(mp.t>=0.97)return {kind:"atjob",mi:wj.mi,min:wj.min,to:L,point:{lat:+j.lat,lng:+j.lng},t:1,real:wj.real};
   if(mp.t<=0.03){const tv=travel(w,L);return {kind:"atlead",mi:tv.mi,min:tv.min,to:L,point:{lat:+L.lat,lng:+L.lng},t:0,real:tv.real}}
   const pnt={lat:mp.lat,lng:mp.lng};const tv=travel(w,pnt);
+  // if meeting the truck is barely shorter than driving to the job itself, just go to the job
+  if(wj.min<=tv.min+5||travel(pnt,j).min<10)return {kind:"atjob",mi:wj.mi,min:wj.min,to:L,point:{lat:+j.lat,lng:+j.lng},t:1,real:wj.real};
   return {kind:"meet",mi:tv.mi,min:tv.min,to:L,point:pnt,t:mp.t,real:tv.real};
 }
 const first=n=>String(n||"").split(" ")[0];
