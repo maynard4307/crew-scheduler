@@ -2,6 +2,19 @@
 
 Tap the version number at the top of the app to see this inside Crew Scheduler.
 
+## 2026.11.09-j — Nov 9, 2026
+
+**New**
+- Load jobs from a support pack: Today → Open job file, pick the pack (.zip). The jobs come back as they were — report times, addresses, map spots, trucks, crew sizes, requested and don't-send people, notes and who's off. It also offers to load the pack's workers.
+
+## 2026.11.09-i — Nov 9, 2026
+
+**New**
+- Smarter address lookup: messy addresses are cleaned up first (like “1891-1801 NC-24” → “1891 NC Highway 24”), more free map services are asked (US Census, and OpenRouteService if your routing key is set), and the result in the town or ZIP you typed is picked — not one far away.
+- If the house can't be found, it falls back to the road, then the ZIP code area, before the town center.
+- Fixed spots are remembered: when you paste the right location for an address, every later job or worker with that address uses it automatically. Saved spots are included in backups.
+- “Look up again” button for jobs and workers marked in orange.
+
 ## 2026.11.09-h — Nov 9, 2026
 
 **New**
