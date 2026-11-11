@@ -4,7 +4,7 @@
 
 - Live app: https://maynard4307.github.io/crew-scheduler/
 - Repository: https://github.com/maynard4307/crew-scheduler (public; GitHub Pages from `main`, root)
-- Current version: **2026.11.09-j** (shown in the app's top bar; tap it for What's new)
+- Current version: **2026.11.11-a** (preview on branch `claude/project-thread-upxyi8`; `main` is still 2026.11.09-j until the owner approves the new layout) (shown in the app's top bar; tap it for What's new)
 - Owner: maynard4307 · Primary user: the owner's brother (dispatcher, iPhone + PC)
 
 ## 1. What it's for
@@ -13,11 +13,21 @@ A field-service contractor in North Carolina gets the next day's jobs as Google 
 
 ## 2. Daily workflow
 
-1. Export the job calendar (calendar.google.com → Settings → the calendar → Export) and open the .zip/.ics in the **Today** tab, or paste event titles. Pick the day (defaults to today).
-2. Check **Trucks** and **Per truck** on each job; mark who's off.
-3. **Build crews** → review notes, adjust with Add/move and 🔒 locks; optional **Review with AI**.
-4. **Copy schedule** (also saves the day to **History**) and send it.
+Tabs: **Today · Workers · History · ⚙ Settings** (since 2026.11.11-a; before that Crew rules and How to were separate tabs).
+
+1. Export the job calendar (calendar.google.com → Settings → the calendar → Export) and open the .zip/.ics in **Today → step 1**, or paste event titles (More menu). Pick the day (defaults to today).
+2. Check **Trucks** and **Per truck** on each job; in step 2 mark who's off.
+3. **Build crews** (step 3, or the bottom bar) → review notes, adjust with Add/move and 🔒 locks; optional **Review with AI**. Steps 1–2 fold into one-line summaries once crews exist (auto-open again when they have problems).
+4. **Copy schedule** (bottom bar or end of the crews; also saves the day to **History**) and send it.
 5. Next morning: **History → Close out** each job (Completed / Rained out / Cancelled, notes, crew changes).
+
+### Where things live (layout agreed Nov 11, 2026)
+
+- **Today**: the daily 1-2-3 flow only. Rare actions (Paste titles, Start new day, Download CSV, Save to History, Clear crews) are under **More** menus. Fixed bottom action bar shows the one next step.
+- **Workers**: people, plus Can't work together / Work well together (shown in each worker's profile too).
+- **History**: unchanged.
+- **⚙ Settings**: Scheduling rules (numbers, checkboxes) → Connections (Road drive times key, AI key) → Backup & restore (+ download app) → Help & updates (how-to topics, What's new, support pack) → Delete data. Jump chips at the top.
+- Per-job and per-lead settings stay on the job / worker form.
 
 ## 3. Business rules (agreed with the owner — don't change without asking)
 
@@ -71,6 +81,7 @@ On the Claude artifact the roster/today also sync through the artifact database 
 - Routing: `travel` (cached real time or estimate), `ors`, `orsMatrix`, `orsRoute`, `warmBeforeSolve`, `warmPlans`, `planPairs`, `meetPoint`
 - Matching: `solve` → `solveInner` (greedy: leads → workers → spare leads, then local search with moves/swaps/chains, ~6–24 random restarts), `pairCrew`, `jobScore`
 - Per-truck view: `trucksFor`, `legFor` (lead / pickup / meet / atlead / atjob / job), `planTruck` (leave-by timeline), `jobIssues`
+- Layout: `render` (tabs `tonight`/`workers`/`history`/`settings`), `rTonight` with `stepWrap` (collapsible steps, `todayOpen` overrides, reset on build/new day), `moreMenu`, `rActionBar` (bottom bar), `goSettings(cardId, openId)` for links into Settings; Settings = `rSettings` → `rRouteSettings`, `rAISettings`, `rBackupCard`, `rHelpCard` (wraps `rHelp` sections as `<details>`), `rDeleteCard`; pair lists `rPairs` on Workers
 - Output: `rResults`, `scheduleText`, `scheduleCSV`, `rMap`
 - History: `saveDayToHistory`, `histEdit`, `rHistory`, `rHistDay`, `rHistSearch`, `historyCSV`, `fileConnect`/`fileSync`, `mergeHistory`
 - AI: `askClaude`, `aiReadNotes`, `aiReview`, `applySuggestion`
@@ -91,7 +102,7 @@ Never commit backups, support packs, CSVs or keys (`.gitignore` blocks `*.json`,
 
 ## 6. Troubleshooting
 
-- Ask for **Crew rules → Pack & save for support** (.zip). To reproduce a day, open that .zip in **Today → Open job file** (loads its jobs, and its workers if you say so). It has the roster, today, last import (raw calendar text), schedule, issues, 60 days of history, the log, and environment (version, where it runs, whether routing/AI keys are set, cached route counts, last routing error).
+- Ask for **Settings → Help → Having a problem? → Pack & save for support** (.zip). To reproduce a day, open that .zip in **Today → Open job file** (loads its jobs, and its workers if you say so). It has the roster, today, last import (raw calendar text), schedule, issues, 60 days of history, the log, and environment (version, where it runs, whether routing/AI keys are set, cached route counts, last routing error).
 - Road times "not used": check `environment.json` → `routingConfigured`, `routeCached`, `routeLastErr`. OpenRouteService's usage dashboard can lag.
 - Calendar parsing problems: check `last-import.json` raw events against `parseJobTitle`.
 - Workers named `{`, `]`, `name: …`, `lat: …` with no address: a backup `.json` was opened with Import list in a version before 2026.11.09-g. Fix: update, then Restore backup (or Import list) with the same file → Replace.
@@ -128,3 +139,4 @@ Never commit backups, support packs, CSVs or keys (`.gitignore` blocks `*.json`,
 | Nov 9, 2026 | Better address lookup with free services only (no Google); remember hand-fixed spots per street address and carry them in backups |
 | Nov 9, 2026 | Jobs are often typed in by hand (not only from the calendar): warn when a typed address lands in another town, only the town center, or far from everyone |
 | Nov 9, 2026 | Backup files opened with Import list are restored as backups (not read as CSV); older backups (version 2, `pickupMiles` setting) still load |
+| Nov 11, 2026 | Simpler layout: 4 tabs (Today · Workers · History · ⚙ Settings); Today is a guided 1-2-3 with collapsing steps and a bottom action bar; pair rules on Workers; one home for backup. Built as a preview branch first for the owner to try |

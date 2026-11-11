@@ -2,6 +2,21 @@
 
 Tap the version number at the top of the app to see this inside Crew Scheduler.
 
+## 2026.11.11-a — Nov 11, 2026
+
+**New**
+- Simpler layout with four tabs: Today, Workers, History and ⚙ Settings. Crew rules and How to are now inside Settings.
+- Today walks you through 3 steps: load jobs, who's working, build crews & send. After crews are built, the first two steps fold up into a one-line summary (tap Edit to open them again).
+- A bar at the bottom of Today always shows the next thing to do: Open job file, Build crews, or Copy schedule.
+- Copy schedule now sits at the end of the crews too, so you don't have to scroll back up to send.
+- Rarely used buttons (Paste titles, Start new day, Download CSV, Clear crews) are under “More”.
+- Can't work together and Work well together moved to the Workers tab, and each worker's profile shows their pairs.
+- Backup & restore has one home: Settings → Backup & restore.
+- How-to topics, What's new and the support pack are in Settings → Help.
+
+**Fixed**
+- How-to said pickups happen within 2 miles of the lead's route. It now says the real rule: when picking up adds no more than 10 minutes (adjustable).
+
 ## 2026.11.09-j — Nov 9, 2026
 
 **New**
