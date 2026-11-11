@@ -100,6 +100,8 @@ code{background:var(--chip);padding:1px 5px;border-radius:5px;font-size:13px;ove
 .card[id]{scroll-margin-top:96px}
 .step.done{background:var(--ok)}
 .stepDone{cursor:pointer;padding:10px 14px}
+.jtBox{border:1px dashed var(--accent);border-radius:var(--radius);padding:10px;margin-bottom:6px}
+.jtBox textarea{min-height:56px}
 .stepDone .sum{flex:1;min-width:0;color:var(--muted);font-size:14px}
 details.more{position:relative;display:inline-block}
 details.more>summary{list-style:none}
@@ -137,9 +139,10 @@ details.hsec>summary{font-weight:600;cursor:pointer;padding:4px 0}
 <script>
 "use strict";
 /* ---------- state ---------- */
-const APP_VERSION="2026.11.11-c";
+const APP_VERSION="2026.11.11-d";
 /* Release notes — newest first. Add an entry here with every update. */
 const CHANGELOG=[
+ {v:"2026.11.11-d",date:"Nov 11, 2026",added:["New option: type a job in plain English. Turn it on in Settings → Type jobs in plain English, then tap + Add a job and type something like “Smith mowing, 412 Oak St Raeford, 7am, 2 trucks of 3, req Marcus, no Kevin”. Tap Fill in the form and it fills in the name, time, address, trucks, crew size and who's requested, for you to check before you Save. It only fills the form: who goes where and who drives is still up to your scheduling rules.","It uses free AI first: the AI built into newer Chrome on a PC (stays on your computer), or Google Gemini with a free key you paste in Settings. With no AI or no internet, a basic reader still picks out the time, trucks, crew size and names. Only the sentence you type is sent, never your worker list or addresses. Off until you turn it on."]},
  {v:"2026.11.11-c",date:"Nov 11, 2026",added:["New option in Settings → Scheduling rules: when a job has a spare crew lead, they can bring their own truck as an extra truck when they'd drive to the job alone anyway, or when it saves the crew at least 10 minutes of driving. The crew size stays the same, and workers ride with whichever truck passes closest to them. It's shown as “Truck 2 (extra)” on the crews and the schedule. Off until you turn it on."]},
  {v:"2026.11.11-b",date:"Nov 11, 2026",added:["New “🚚 Make driver” button: when a job has more than one crew lead, tap it next to the lead you want driving the truck. It stays that way when you rebuild, like a 🔒 lock (tap the lock to undo)."],fixed:["When a job had two crew leads, the one living closest to the job always got the truck, even when the other lead lived next to the workers. Now the app picks the driver that makes the least driving for the whole crew, so people near the other lead can ride along instead of driving themselves."]},
  {v:"2026.11.11-a",date:"Nov 11, 2026",added:["Simpler layout with four tabs: Today, Workers, History and ⚙ Settings. Crew rules and How to are now inside Settings.","Today walks you through 3 steps: load jobs, who's working, build crews & send. After crews are built, the first two steps fold up into a one-line summary (tap Edit to open them again).","A bar at the bottom of Today always shows the next thing to do: Open job file, Build crews, or Copy schedule.","Copy schedule now sits at the end of the crews too, so you don't have to scroll back up to send.","Rarely used buttons (Paste titles, Start new day, Download CSV, Clear crews) are under “More”.","Can't work together and Work well together moved to the Workers tab, and each worker's profile shows their pairs.","Backup & restore has one home: Settings → Backup & restore.","How-to topics, What's new and the support pack are in Settings → Help.","Phoenix Spirit Group logo at the top, and as the icon when you add the app to your home screen."],fixed:["How-to said pickups happen within 2 miles of the lead's route. It now says the real rule: when picking up adds no more than 10 minutes (adjustable)."]},
@@ -1241,6 +1244,7 @@ function render(){
   document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.tab===tab));
   const el=$("#app");
   el.innerHTML=tab==="tonight"?rTonight():tab==="workers"?rWorkers():tab==="history"?rHistory():rSettings();
+  if(tab==="settings")jtShowBuiltin();
   rActionBar();
   const od=openCloseouts();$("#histDot")?.classList.toggle("hide",!od.length);
   if(tab==="tonight"&&tonight.assign&&routeReady()&&!warmBusy){const pp=planPairs();if(pp.pairs.length||pp.geo.length)scheduleWarm()}
@@ -1324,6 +1328,7 @@ function jobForm(){
   const j=editingJob==="new"?{name:"",address:"",crew:S().defaultCrew,trucks:1}:jById(editingJob)||{};
   const loc=hasLoc(j)?`${j.lat.toFixed(6)}, ${j.lng.toFixed(6)}`:"";
   return `<div class="card" style="margin-top:10px;background:var(--bg)"><h3 style="margin-top:0">${editingJob==="new"?"Add a job":"Edit job"}</h3>
+  ${rJobTextBox()}
   <label class="f">Job name</label><input type="text" id="jfName" value="${esc(j.name)}">
   <label class="f">Report time</label><input type="text" id="jfTime" value="${esc(j.time||"")}" placeholder="7:00a">
   <label class="f">Address (for reference)</label><input type="text" id="jfAddr" value="${esc(j.address)}">
@@ -1530,7 +1535,7 @@ function rPairs(){
 function rSettings(){
   const s=S();
   return `<div class="card"><h2 style="margin-top:0">⚙ Settings</h2><p class="small muted">Things you set once. The daily work is on <b>Today</b>; people and who works with whom are on <b>Workers</b>.</p>
-  <div class="jump"><button class="chip" data-act="jump" data-to="rulesCard">Scheduling rules</button><button class="chip" data-act="jump" data-to="routeCard">Road drive times</button><button class="chip" data-act="jump" data-to="aiCard">AI assistant</button><button class="chip" data-act="jump" data-to="backupCard">Backup &amp; restore</button><button class="chip" data-act="jump" data-to="helpCard">Help</button><button class="chip" data-act="jump" data-to="deleteCard">Delete data</button></div></div>
+  <div class="jump"><button class="chip" data-act="jump" data-to="rulesCard">Scheduling rules</button><button class="chip" data-act="jump" data-to="routeCard">Road drive times</button><button class="chip" data-act="jump" data-to="aiCard">AI assistant</button><button class="chip" data-act="jump" data-to="jobTextCard">Plain-English jobs</button><button class="chip" data-act="jump" data-to="backupCard">Backup &amp; restore</button><button class="chip" data-act="jump" data-to="helpCard">Help</button><button class="chip" data-act="jump" data-to="deleteCard">Delete data</button></div></div>
   <div class="card" id="rulesCard"><h2>Scheduling rules</h2>
   <div class="row"><label class="f grow" style="margin:0">Default people per truck (lead + workers)</label><input type="number" min="1" max="20" data-set="defaultCrew" value="${s.defaultCrew}"></div>
   <div class="row" style="margin-top:8px"><label class="f grow" style="margin:0"><b>Max distance from crew lead's home to job</b>, miles (0 = no limit). Set a different limit on any lead in their Workers profile.</label><input type="number" min="0" max="500" data-set="maxLeadMiles" value="${s.maxLeadMiles||0}"></div>
@@ -1544,7 +1549,7 @@ function rSettings(){
   <label class="row small" style="margin-bottom:6px"><input type="checkbox" data-set="allowStores" ${s.allowStores?"checked":""}> Meet spot search: include store &amp; gas station lots (Walmart, Food Lion…)</label>
   <label class="row small" style="margin-bottom:6px"><input type="checkbox" data-set="leadsAsHelpers" ${s.leadsAsHelpers?"checked":""}> If there are spare leads, let them fill worker spots (their truck stays parked)</label>
   <label class="row small"><input type="checkbox" data-set="extraTruck" ${s.extraTruck?"checked":""}> If a job has a spare lead, let them bring their own truck as an extra truck when they'd drive to the job alone anyway, or when it saves the crew at least ${EXTRA_TRUCK_MIN} min of driving</label></div>`
-  +`<h3 class="secHd">Connections</h3>`+rRouteSettings()+rAISettings()
+  +`<h3 class="secHd">Connections</h3>`+rRouteSettings()+rAISettings()+rJobTextSettings()
   +`<h3 class="secHd">Your data</h3>`+rBackupCard()
   +rHelpCard()
   +rDeleteCard();
@@ -1834,6 +1839,185 @@ function rAISettings(){
   <label class="row small" style="margin-top:10px"><input type="checkbox" id="aiAuto" ${c.autoNotes?"checked":""}> Read job notes with AI automatically after each calendar import</label>
   <div class="row" style="margin-top:10px"><button class="b p" data-act="aiSave">Save</button><button class="b" data-act="aiTest" ${c.key?"":"disabled"}>Test</button>${c.key?`<button class="b" data-act="aiRemove" style="color:var(--bad)">Remove key</button>`:""}</div>
   <p class="small muted" style="margin-bottom:0">AI sends worker names, lead status, job titles/notes, distances and crew rules to Anthropic. Home addresses, phone numbers and map locations are never sent. AI features work on the website version (not on the shared Claude page).</p></div>`;
+}
+/* ---------- Type a job in plain English (optional, off by default) ----------
+   The dispatcher types something like "Smith mowing 412 Oak St Raeford, 7am, 2 trucks of 3, req Marcus, no Kevin"
+   and the Add a job form is filled in for them to check and Save. It only fills the form: nothing is saved
+   without the Save button, and building crews / picking drivers still follows the normal rules.
+   Readers, tried in this order with "Automatic": the browser's built-in AI (Chrome 148+ on a capable PC; free,
+   stays on the device) → Google Gemini (free key) → Claude (the AI assistant key) → the basic reader (no AI,
+   works offline). Only the typed sentence is sent; the roster is never sent — names are matched on the device.
+   Settings + Gemini key live only in localStorage "crew_jobtext" (never in backups or support packs). */
+const JT_ENGINES=[["auto","Automatic — free options first"],["builtin","Built-in browser AI (free, on this device)"],["gemini","Google Gemini (free key)"],["claude","Claude (uses the AI assistant key)"],["basic","Basic reader — no AI, works offline"]];
+const JT_GEMINI_MODEL="gemini-2.5-flash";
+function jtCfg(){return lsGet("crew_jobtext")||{}}
+function jtSet(c){lsSet("crew_jobtext",c)}
+const jtOn=()=>!!jtCfg().on;
+let formAI=null;   // extra details read from the typed sentence (don't send, note) — applied on Save
+const JT_SYS=`You turn a dispatcher's plain-English description of ONE field-service job into form fields. Every truck has one crew lead plus workers.
+Return JSON only, with these keys:
+- name: short job name, usually the client (and contact if given), e.g. "Smith" or "Lee Electric / Cameron Epps". No times, counts, days or addresses in it.
+- time: report time like "7:00a" or "12:30p", or "" if not given.
+- address: street address and/or town as written (add ", NC" only if it is clearly a North Carolina town with no state), or "".
+- trucks: number of trucks, or null if not stated.
+- perTruck: people per truck INCLUDING the lead, or null if not stated. "3 guys" or "3 man crew" with one truck = 3. If a total head count is given with several trucks, divide it evenly (round up).
+- requested: names of people asked for on this job, exactly as written ([] if none).
+- avoid: names of people NOT to send ([] if none).
+- day: the day mentioned ("Tuesday", "tomorrow", "Nov 14") or "".
+- note: one short line of anything else the crew needs to know (equipment, gate code, site rules), or "".
+Never invent numbers, names or addresses that are not in the text.`;
+const JT_SCHEMA={type:"object",properties:{name:{type:"string"},time:{type:"string"},address:{type:"string"},trucks:{type:["integer","null"]},perTruck:{type:["integer","null"]},requested:{type:"array",items:{type:"string"}},avoid:{type:"array",items:{type:"string"}},day:{type:"string"},note:{type:"string"}},required:["name","time","address","trucks","perTruck","requested","avoid","day","note"]};
+async function jtBuiltinState(){
+  try{if(!("LanguageModel" in self))return "unavailable";return await LanguageModel.availability({expectedInputs:[{type:"text",languages:["en"]}],expectedOutputs:[{type:"text",languages:["en"]}]})}catch(e){return "unavailable"}
+}
+async function jtBuiltin(text){
+  const st=await jtBuiltinState();
+  if(st==="unavailable")throw new Error("This browser has no built-in AI (it needs Chrome 148 or newer on a capable PC).");
+  if(st!=="available")throw new Error(st==="downloading"?"The built-in AI is still downloading. Try again in a few minutes.":"The built-in AI needs a one-time download first: Settings → Type jobs in plain English → Test.");
+  const s=await LanguageModel.create({initialPrompts:[{role:"system",content:JT_SYS}],expectedInputs:[{type:"text",languages:["en"]}],expectedOutputs:[{type:"text",languages:["en"]}]});
+  try{return parseJSONLoose(await s.prompt(text,{responseConstraint:JT_SCHEMA}))}finally{try{s.destroy()}catch(e){}}
+}
+async function jtGemini(text){
+  const c=jtCfg();if(!c.geminiKey)throw new Error("Add a free Gemini key in Settings → Type jobs in plain English.");
+  let r;
+  try{r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(c.geminiModel||JT_GEMINI_MODEL)}:generateContent`,{method:"POST",headers:{"x-goog-api-key":c.geminiKey,"content-type":"application/json"},
+    body:JSON.stringify({systemInstruction:{parts:[{text:JT_SYS}]},contents:[{role:"user",parts:[{text}]}],generationConfig:{responseMimeType:"application/json",temperature:0}})})}
+  catch(e){throw new Error("Couldn't reach Gemini. Check the internet connection.")}
+  let j=null;try{j=await r.json()}catch(e){}
+  if(!r.ok){const m=j&&j.error&&j.error.message||("HTTP "+r.status);logEvent("ai-error",`gemini ${r.status}: ${m}`);
+    if(r.status===400&&/key/i.test(m)||r.status===403)throw new Error("Gemini didn't accept the key. Check it in Settings.");
+    if(r.status===429)throw new Error("Gemini's free daily limit is used up. Try again later.");
+    if(r.status===404)throw new Error(`Gemini doesn't know the model “${c.geminiModel||JT_GEMINI_MODEL}”. Check the model name in Settings.`);
+    throw new Error("Gemini error: "+m)}
+  logEvent("ai","ok gemini "+(c.geminiModel||JT_GEMINI_MODEL));
+  return parseJSONLoose((j.candidates?.[0]?.content?.parts||[]).map(p=>p.text||"").join(""));
+}
+async function jtClaude(text){return parseJSONLoose(await askClaude(JT_SYS,text,800))}
+/* Basic reader: no AI, works anywhere */
+const JT_NUM={one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,a:1,an:1,single:1};
+const JT_DAY=/\b(today|tonight|tomorrow|mon(?:day)?|tue(?:s|sday)?|wed(?:nesday)?|thu(?:rs?|rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b|\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.? \d{1,2}\b|\b\d{1,2}\/\d{1,2}\b/i;
+const JT_STREET=/\b\d{1,6}\s+(?:[NSEW]\.?\s+)?[A-Za-z0-9.' -]{1,40}?\b(?:st|street|rd|road|ave|avenue|dr|drive|ln|lane|hwy|highway|blvd|boulevard|ct|court|way|pl|place|pkwy|parkway|cir|circle|trl|trail|loop|run|church rd|(?:nc|us|sr)[- ]?\d+)\b\.?(?:\s*,?\s*[A-Z][A-Za-z .]+?)?(?:,?\s*(?:NC|SC|VA)\b)?(?:\s+\d{5})?(?=$|[,;]|\s+(?:at|for|with|need|needs|req|no|\d))/i;
+function jtBasic(text){
+  let t=" "+String(text||"").replace(/\s+/g," ").trim()+" ";
+  const words=n=>JT_NUM[String(n).toLowerCase()]||+n;
+  const out={name:"",time:"",address:"",trucks:null,perTruck:null,requested:[],avoid:[],day:"",note:""};
+  let m=t.match(/\b(\d{1,2})(?::(\d{2}))?\s*(a\.?m?\.?|p\.?m?\.?)(?=[\s,;.]|$)/i)||t.match(/\b(?:at|@)\s*(\d{1,2})(?::(\d{2}))?\b(?!\s*(?:trucks?|guys?|men|man|people|workers?))/i);
+  if(m){const h=+m[1],ap=m[3]?m[3][0].toLowerCase():(h>=6&&h<=11?"a":"p");out.time=`${h}:${m[2]||"00"}${ap}`;t=t.replace(m[0]," ")}
+  else if(/\bnoon\b/i.test(t)){out.time="12:00p";t=t.replace(/\b(?:at\s+)?noon\b/i," ")}
+  const NUM="(\\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|a|an|single)";
+  m=t.match(new RegExp(`\\b${NUM}\\s*(?:x\\s*)?(?:trucks?|tks?)\\b(?:\\s*(?:of|with|x)\\s*${NUM}(?:\\s*(?:each|guys|men|people|man))?)?`,"i"));
+  if(m){out.trucks=words(m[1]);if(m[2])out.perTruck=words(m[2]);t=t.replace(m[0]," ")}
+  m=t.match(new RegExp(`\\b${NUM}\\s*(?:per|a|each)\\s*truck\\b`,"i"))||t.match(new RegExp(`\\bcrew\\s*(?:of|size)?\\s*:?\\s*${NUM}\\b`,"i"))||t.match(new RegExp(`\\b${NUM}\\s*[- ]?(?:guys?|men|man|people|ppl|person|workers?|hands)\\b(?:\\s*crews?)?(?:\\s*(?:per|a|each)\\s*truck)?`,"i"));
+  if(m){const n=words(m[1]);const perTruck=/truck|crew/i.test(m[0]);out.perTruck=out.perTruck||(out.trucks>1&&!perTruck?Math.ceil(n/out.trucks):n);t=t.replace(m[0]," ")}
+  m=t.match(JT_DAY);if(m){out.day=m[0].trim();t=t.replace(new RegExp(`\\b(?:on|for|this|next)?\\s*${m[0].replace(/[.*+?^${}()|[\]\\\/]/g,"\\$&")}`,"i")," ")}
+  m=t.match(JT_STREET);if(m){out.address=m[0].trim().replace(/[,.]$/,"");t=t.replace(m[0]," ")}
+  else{m=t.match(/\b(?:in|at|near)\s+([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)(?:,?\s*(NC|SC|VA))?\b/);if(m){out.address=`${m[1]}, ${m[2]||"NC"}`;t=t.replace(m[0]," ")}}
+  // "req Marcus, Lena" / "no Kevin" — names are matched to the roster later
+  const NEG=/\b(?:no|not|don'?t send|do not send|without|avoid|keep)\s+$/i;
+  const used=[];
+  for(const w of roster.workers.filter(w=>w.active!==false)){
+    for(const key of jtNameKeys(w)){
+      const re=new RegExp(`\\b${key.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}\\b`,"i");const mm=t.match(re);if(!mm)continue;
+      const before=t.slice(0,mm.index);
+      (NEG.test(before.slice(-22))?out.avoid:out.requested).push(mm[0]);used.push(mm[0]);break;
+    }
+  }
+  used.forEach(n=>{t=t.replace(new RegExp(`\\b(?:(?:no|not|don'?t send|do not send|without|avoid)\\s+)?${n.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}\\b(?:\\s+(?:off|away))?`,"i")," ")});
+  t=t.replace(/\b(?:req(?:uested|uest)?|wants?|asks? for|send|need(?:s|ed)?|with|and|plus)\s*:?\s*(?=[,;.]|\s*$)/gi," ").replace(/\b(?:req(?:uested)?|ask(?:ed)? for)\s*:/gi," ");
+  const parts=t.split(/[,;.]|\s[-–]\s/).map(s=>s.replace(/\s{2,}/g," ").trim()).filter(Boolean);
+  const head=(parts.shift()||"").replace(/\b(?:at|on|for|in|with|need|needs|send|the|and)\s*$/i,"").trim();
+  out.name=head;
+  const rest=parts.filter(p=>!/^(?:req(?:uested)?|need|needs|send|and|with|at|on|for|no|crew)$/i.test(p)&&p.length>2);
+  if(rest.length)out.note=rest.join(", ").slice(0,200);
+  return out;
+}
+/* Ways a worker may be written: full name, first name, last name — only ones that point to one person */
+function jtNameKeys(w){
+  const all=roster.workers.filter(x=>x.active!==false).map(x=>x.name.replace(/\(.*?\)/g,"").trim().toLowerCase());
+  const n=w.name.replace(/\(.*?\)/g,"").trim();const p=n.split(/\s+/);const keys=[n];
+  const firstN=p[0].toLowerCase();if(p[0].length>1&&all.filter(a=>a.split(/\s+/)[0]===firstN).length===1)keys.push(p[0]);
+  if(p.length>1){const last=p[p.length-1].toLowerCase();if(last.length>2&&all.filter(a=>{const q=a.split(/\s+/);return q.length>1&&q[q.length-1]===last}).length===1)keys.push(p[p.length-1])}
+  return keys;
+}
+function jtPerson(name){
+  const w=personByName(name);if(w)return w;
+  const n=String(name||"").trim().toLowerCase();if(!n)return null;
+  const hits=roster.workers.filter(x=>x.active!==false&&jtNameKeys(x).some(k=>k.toLowerCase()===n));
+  return hits.length===1?hits[0]:null;
+}
+/* Pick the reader and read the sentence. Returns {f, by, fellBack} */
+async function readJobText(text){
+  const c=jtCfg();const eng=c.engine||"auto";const errs=[];
+  const order=eng==="auto"?["builtin","gemini","claude"]:eng==="basic"?[]:[eng];
+  for(const e of order){
+    if(eng==="auto"){
+      if(e==="builtin"&&await jtBuiltinState()!=="available")continue;
+      if(e==="gemini"&&!c.geminiKey)continue;
+      if(e==="claude"&&!aiReady())continue;
+    }
+    if(!navigator.onLine&&e!=="builtin"){errs.push("offline");continue}
+    try{const f=await (e==="builtin"?jtBuiltin(text):e==="gemini"?jtGemini(text):jtClaude(text));return {f,by:{builtin:"the built-in browser AI",gemini:"Gemini",claude:"Claude"}[e]}}
+    catch(x){errs.push(x.message);logEvent("ai-error","job text "+e+": "+x.message)}
+  }
+  return {f:jtBasic(text),by:"the basic reader",fellBack:eng!=="basic"&&errs.length?errs[errs.length-1]:(eng==="auto"?"no AI is set up on this device":"")};
+}
+function jtNum(v){v=Math.round(+v);return v>=1&&v<=20?v:null}
+async function jobTextFill(btn){
+  const text=($("#jfText")?.value||"").trim();if(!text){toast("Type the job first, like: Smith mowing 412 Oak St Raeford, 7am, 3 guys");return}
+  btn.disabled=true;const lbl=btn.textContent;btn.textContent="Reading…";
+  let res;try{res=await readJobText(text)}finally{btn.disabled=false;btn.textContent=lbl}
+  const f=res.f||{};const set=(id,v)=>{const el=$(id);if(el&&v!=null&&String(v).trim()!=="")el.value=String(v).trim()};
+  set("#jfName",String(f.name||"").slice(0,120));
+  set("#jfTime",f.time?fmtTime(String(f.time).replace(/\s|\./g,"")):"");
+  const oldAddr=$("#jfAddr")?.value.trim();set("#jfAddr",String(f.address||"").slice(0,200));
+  if(jtNum(f.trucks))$("#jfTrucks").value=jtNum(f.trucks);
+  if(jtNum(f.perTruck))$("#jfCrew").value=jtNum(f.perTruck);
+  const miss=[];const req=[],av=[];
+  for(const n of (f.requested||[])){const w=jtPerson(n);if(w)req.push(w);else miss.push(n)}
+  for(const n of (f.avoid||[])){const w=jtPerson(n);if(w)av.push(w);else miss.push(n)}
+  const avIds=new Set(av.map(w=>w.id));
+  const prevReq=new Set(formAI?.req||[]);   // people a previous Fill turned on: turn them off again if this text doesn't name them
+  document.querySelectorAll("#jfReq .chip").forEach(ch=>{const id=ch.dataset.id,isOff=ch.classList.contains("off"),want=req.some(w=>w.id===id)&&!avIds.has(id);
+    if(want&&isOff)ch.click();else if(!isOff&&(avIds.has(id)||(!want&&prevReq.has(id))))ch.click()});
+  const note=String(f.note||"").trim().slice(0,240);
+  formAI={avoid:[...avIds],note,req:req.filter(w=>!avIds.has(w.id)).map(w=>w.id)};
+  const got=[f.name&&"name",f.time&&"time",f.address&&"address",jtNum(f.trucks)&&"trucks",jtNum(f.perTruck)&&"crew size",req.length&&"requested people"].filter(Boolean);
+  const msg=[`Filled in by ${res.by}${got.length?": "+got.join(", "):" — it couldn't pick anything out"}. Check it, then Save.`,
+    av.length?`Don't send: ${av.map(w=>w.name).join(", ")}.`:"",note?`Note: ${note}`:"",
+    f.day?`You said “${f.day}” — this adds the job to the day you're scheduling now.`:"",
+    miss.length?`Not on your worker list: ${miss.slice(0,4).join(", ")}.`:"",
+    res.fellBack?`AI wasn't used (${String(res.fellBack).replace(/\.$/,"")}).`:""].filter(Boolean);
+  const box=$("#jfTextMsg");if(box){box.innerHTML=msg.map(esc).join("<br>");box.classList.remove("hide")}
+  logEvent("jobtext",`filled by ${res.by}`,{fields:got.length});
+  const addr=$("#jfAddr")?.value.trim();
+  if(addr&&addr!==oldAddr){$("#jfLoc").value="";formGeo=null;$('[data-act="findJobForm"]')?.click()}
+}
+function rJobTextBox(){
+  if(!jtOn())return "";
+  return `<div class="jtBox"><label class="f" style="margin-top:0">✨ Type the job in plain English</label>
+  <textarea id="jfText" rows="2" placeholder="Smith mowing, 412 Oak St Raeford, 7am, 2 trucks of 3, req Marcus, no Kevin"></textarea>
+  <div class="row" style="margin-top:6px"><button class="b small p" data-act="jobTextFill">Fill in the form</button><span class="small muted">Fills the boxes below for you to check. Nothing is saved until you tap Save.</span></div>
+  <div id="jfTextMsg" class="small hide" style="margin-top:6px"></div></div>`;
+}
+function rJobTextSettings(){
+  const c=jtCfg();
+  return `<div class="card" id="jobTextCard"><h2>✨ Type jobs in plain English</h2>
+  <p class="small muted">Adds a box to <b>+ Add a job</b> where you can type a job the way you'd say it, like “Smith mowing, 412 Oak St Raeford, 7am, 3 guys, req Marcus”, and it fills in the form for you to check. It only fills the form — who goes where and who drives is still decided by your scheduling rules.</p>
+  <label class="row small"><input type="checkbox" id="jtOn" ${c.on?"checked":""}> Turn on plain-English job entry</label>
+  <label class="f">Who reads what you type</label><select id="jtEngine">${JT_ENGINES.map(([v,l])=>`<option value="${v}" ${(c.engine||"auto")===v?"selected":""}>${esc(l)}</option>`).join("")}</select>
+  <div class="small muted" id="jtBuiltinNote" style="margin-top:4px">Checking for built-in browser AI…</div>
+  <details style="margin-top:8px" ${c.geminiKey?"":""}><summary class="small">Google Gemini key (free)</summary>
+  <p class="small muted">Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> (sign in with a Google account, tap Create API key). The free plan has a daily limit that is far more than a dispatcher needs. Google may use what you send on the free plan to improve its products, so don't type phone numbers or anything private.</p>
+  ${c.geminiKey?`<div class="good">Gemini key saved on this device (…${esc(c.geminiKey.slice(-4))}).</div>`:""}
+  <label class="f">Gemini API key</label><input type="text" id="jtKey" placeholder="${c.geminiKey?"Paste a new key to replace it":"AIza…"}" autocomplete="off" autocapitalize="off" spellcheck="false" style="-webkit-text-security:disc">
+  <label class="f">Gemini model</label><input type="text" id="jtModel" value="${esc(c.geminiModel||JT_GEMINI_MODEL)}" autocomplete="off" autocapitalize="off" spellcheck="false">
+  ${c.geminiKey?`<div class="row" style="margin-top:6px"><button class="b small" data-act="jtRemoveKey" style="color:var(--bad)">Remove Gemini key</button></div>`:""}</details>
+  <div class="row" style="margin-top:10px"><button class="b p" data-act="jtSave">Save</button><button class="b" data-act="jtTest">Test</button></div>
+  <p class="small muted" style="margin-bottom:0">With “Automatic”, it uses the built-in browser AI when this computer has it, then Gemini if you saved a key, then Claude if the AI assistant key is set. With no AI, or no internet, the basic reader still picks out the time, trucks, crew size, an address and names from your worker list. Only the sentence you type is sent; your worker list and addresses are never sent. Keys stay on this device — never in backups or support packs.</p></div>`;
+}
+async function jtShowBuiltin(){
+  const el=$("#jtBuiltinNote");if(!el)return;const st=await jtBuiltinState();
+  el.textContent={available:"✅ This browser has built-in AI ready (free, stays on this device).",downloadable:"This browser can use built-in AI, but needs to download it first (about 2–4 GB, one time). Tap Test to start.",downloading:"The built-in AI is downloading. It will be ready soon."}[st]||"This browser has no built-in AI (it needs Chrome 148+ on a newer PC; not on phones). Gemini or the basic reader will be used.";
 }
 /* ---------- history ----------
    One record per day, kept forever. Stored in IndexedDB (falls back to localStorage), included in backups,
@@ -2126,7 +2310,7 @@ async function supportPack(){
   const env={appVersion:APP_VERSION,savedSpots:Object.keys(places).length,censusReachable:!censusDown,packedAt:now.toISOString(),timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,userAgent:navigator.userAgent,
     screen:`${screen.width}x${screen.height} @${devicePixelRatio}x`,where:location.protocol==="file:"?"local file":location.host||"claude page",
     storage:dbOK?"Claude account":"this device",localStorage:ls,online:navigator.onLine,jszip:!!window.JSZip,
-    aiConfigured:aiReady(),routingConfigured:routeReady(),routeCached:Object.keys(RC).length,routeGeoms:Object.keys(RG).length,routeLastErr,aiModel:aiCfg().model||"",counts:{workers:roster.workers.length,leads:roster.workers.filter(w=>w.lead).length,jobs:tonight.jobs.length,jobsWithoutLocation:tonight.jobs.filter(j=>!hasLoc(j)).length,workersWithoutLocation:roster.workers.filter(w=>!hasLoc(w)).length,offToday:tonight.off.length,conflicts:roster.conflicts.length,prefers:roster.prefers.length,cachedLookups:Object.keys(geo).length}};
+    aiConfigured:aiReady(),jobText:{on:jtOn(),engine:jtCfg().engine||"auto",gemini:!!jtCfg().geminiKey},routingConfigured:routeReady(),routeCached:Object.keys(RC).length,routeGeoms:Object.keys(RG).length,routeLastErr,aiModel:aiCfg().model||"",counts:{workers:roster.workers.length,leads:roster.workers.filter(w=>w.lead).length,jobs:tonight.jobs.length,jobsWithoutLocation:tonight.jobs.filter(j=>!hasLoc(j)).length,workersWithoutLocation:roster.workers.filter(w=>!hasLoc(w)).length,offToday:tonight.off.length,conflicts:roster.conflicts.length,prefers:roster.prefers.length,cachedLookups:Object.keys(geo).length}};
   const readme=`Crew Scheduler — support pack
 Made ${now.toLocaleString()} · app version ${APP_VERSION}
 
@@ -2311,7 +2495,7 @@ document.addEventListener("click",async e=>{
       const t=$("#pasteTxt").value.trim();if(!t)return;
       try{const k=detectKind(t);rawImportText=t;let p=placesFrom(k,t);p=p.filter(x=>x.name);if(!p.length)throw new Error("No jobs found in that text.");await importPlaces(k,p,"paste")}catch(err){toast(err.message)}
       break;}
-    case "addJob":editingJob="new";formGeo=null;render();break;
+    case "addJob":editingJob="new";formGeo=null;formAI=null;render();break;
     case "reqToggle":{const on=el.classList.toggle("off");el.style.cssText=on?"text-decoration:none":"background:var(--accent);color:var(--accent-ink);border-color:var(--accent)";break;}
     case "findJobs":geocodeMissing("jobs");break;
     case "refindJobs":case "refindWorkers":{
@@ -2336,8 +2520,8 @@ document.addEventListener("click",async e=>{
         toast(wn?"⚠ "+wn:(r.exact?"Found: ":"Approx. match: ")+(r.label||"").split(",").slice(0,3).join(","))}else toast("Couldn't find that address — try adding the town and state")}
       catch(e){toast("Can't look up addresses here — use the downloaded file version, or paste coordinates.")}
       el.disabled=false;el.textContent="Find from address";break;}
-    case "editJob":editingJob=id;formGeo=null;render();setTimeout(()=>$("#jfName")?.scrollIntoView({block:"center"}),0);break;
-    case "cancelJob":editingJob=null;render();break;
+    case "editJob":editingJob=id;formGeo=null;formAI=null;render();setTimeout(()=>$("#jfName")?.scrollIntoView({block:"center"}),0);break;
+    case "cancelJob":editingJob=null;formAI=null;render();break;
     case "saveJob":{
       const name=$("#jfName").value.trim()||"Job";const c=parseCoords($("#jfLoc").value);
       if($("#jfLoc").value.trim()&&!c){toast("Couldn't read that location — paste like 40.01, -82.98");return}
@@ -2350,6 +2534,7 @@ document.addEventListener("click",async e=>{
       else{const j=jById(editingJob);const moved=!c||!hasLoc(j)||Math.abs(c.lat-j.lat)>1e-6||Math.abs(c.lng-j.lng)>1e-6;Object.assign(j,{name,time,address:addr,lat:c?c.lat:null,lng:c?c.lng:null,crew,trucks,requested});if(fg){j.geoNote=fg.geoNote;j.geoLabel=fg.geoLabel}else if(moved){j.geoNote=c?"Set by hand":"";j.geoLabel=""}}
       if(c&&!fg&&addr&&placeSave(addr,c.lat,c.lng,name))toast("Saved — this spot will be used next time for "+addr.split(",")[0]);
       if(!c&&addr&&hadLoc)placeForget(addr);   // location cleared on purpose: look it up fresh
+      if(formAI){const j=jById(jid);if(j){j.avoid=[...new Set([...(j.avoid||[]),...formAI.avoid])].filter(x=>!(j.requested||[]).includes(x));if(formAI.note)j.aiNote=formAI.note}formAI=null}
       editingJob=null;save("tonight");render();
       if(!c&&addr)geocodeMissing("jobs",jid);
       break;}
@@ -2447,6 +2632,18 @@ document.addEventListener("click",async e=>{
     case "goAI":goSettings("aiCard");break;
     case "aiSave":{const c=aiCfg();const k=$("#aiKey").value.trim();if(k)c.key=k;c.model=$("#aiModel").value;c.autoNotes=$("#aiAuto").checked;
       if(!c.key){toast("Paste your API key first");return}aiSet(c);logEvent("ai-setup","saved settings");render();toast("AI settings saved on this device");break;}
+    case "jobTextFill":await jobTextFill(el);break;
+    case "jtSave":{const c=jtCfg();c.on=$("#jtOn").checked;c.engine=$("#jtEngine").value;const k=$("#jtKey").value.trim();if(k)c.geminiKey=k;c.geminiModel=$("#jtModel").value.trim()||JT_GEMINI_MODEL;
+      if(c.engine==="gemini"&&!c.geminiKey){toast("Paste your Gemini key first (under Google Gemini key)");return}
+      if(c.engine==="claude"&&!aiReady()){toast("Add the Claude key in AI assistant first");return}
+      jtSet(c);logEvent("ai-setup","plain-English jobs "+(c.on?"on":"off")+" · "+c.engine);render();toast(c.on?"Plain-English job entry is on — find it in + Add a job":"Plain-English job entry is off");break;}
+    case "jtRemoveKey":if(await ask("Remove the Gemini key from this device?","Remove")){const c=jtCfg();delete c.geminiKey;jtSet(c);render();toast("Gemini key removed")}break;
+    case "jtTest":{const eng=$("#jtEngine").value;const k=$("#jtKey").value.trim();
+      if(eng==="builtin"||eng==="auto"){const st=await jtBuiltinState();if(st==="downloadable"||st==="downloading"){try{await LanguageModel.create({expectedInputs:[{type:"text",languages:["en"]}],expectedOutputs:[{type:"text",languages:["en"]}],monitor(m){m.addEventListener("downloadprogress",e=>{const n=$("#jtBuiltinNote");if(n)n.textContent=`Downloading built-in AI… ${Math.round(e.loaded*100)}%`})}});toast("Built-in AI is ready")}catch(e){toast("Built-in AI couldn't download: "+e.message)}jtShowBuiltin();if(eng==="builtin")break}}
+      const old=jtCfg();const tmp={...old,engine:eng,geminiKey:k||old.geminiKey,geminiModel:$("#jtModel").value.trim()||JT_GEMINI_MODEL};
+      el.disabled=true;el.textContent="Testing…";
+      try{jtSet(tmp);const r=await readJobText("Test job at 9am, 2 trucks of 3");const ok=r.f&&+r.f.trucks===2;toast(r.fellBack?`Using the basic reader (${r.fellBack})`:`✅ ${r.by} works${ok?"":" (answer looked off — try again)"}`)}
+      catch(e){toast(e.message)}finally{jtSet(old);el.disabled=false;el.textContent="Test"}break;}
     case "aiRemove":if(await ask("Remove the Claude API key from this device?","Remove")){aiSet({});render();toast("Key removed")}break;
     case "aiTest":{el.disabled=true;el.textContent="Testing…";try{const t=await askClaude("Reply with exactly: OK","Test",20);toast(/ok/i.test(t)?"✅ Claude is connected":"Claude answered: "+t.slice(0,60))}catch(e){toast(e.message)}el.disabled=false;el.textContent="Test";break;}
     case "aiNotes":{el.disabled=true;el.textContent="🤖 Reading notes…";try{await aiReadNotes()}catch(e){toast(e.message);el.disabled=false;el.textContent="🤖 Read job notes with AI"}break;}

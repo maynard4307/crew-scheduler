@@ -2,6 +2,12 @@
 
 Tap the version number at the top of the app to see this inside Crew Scheduler.
 
+## 2026.11.11-d — Nov 11, 2026
+
+**New**
+- New option: type a job in plain English. Turn it on in Settings → Type jobs in plain English, then tap + Add a job and type something like “Smith mowing, 412 Oak St Raeford, 7am, 2 trucks of 3, req Marcus, no Kevin”. Tap Fill in the form and it fills in the name, time, address, trucks, crew size and who's requested, for you to check before you Save. It only fills the form: who goes where and who drives is still up to your scheduling rules.
+- It uses free AI first: the AI built into newer Chrome on a PC (stays on your computer), or Google Gemini with a free key you paste in Settings. With no AI or no internet, a basic reader still picks out the time, trucks, crew size and names. Only the sentence you type is sent, never your worker list or addresses. Off until you turn it on.
+
 ## 2026.11.11-c — Nov 11, 2026
 
 **New**
