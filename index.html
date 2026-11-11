@@ -137,9 +137,10 @@ details.hsec>summary{font-weight:600;cursor:pointer;padding:4px 0}
 <script>
 "use strict";
 /* ---------- state ---------- */
-const APP_VERSION="2026.11.11-b";
+const APP_VERSION="2026.11.11-c";
 /* Release notes — newest first. Add an entry here with every update. */
 const CHANGELOG=[
+ {v:"2026.11.11-c",date:"Nov 11, 2026",added:["New option in Settings → Scheduling rules: when a job has a spare crew lead, they can bring their own truck as an extra truck when they'd drive to the job alone anyway, or when it saves the crew at least 10 minutes of driving. The crew size stays the same, and workers ride with whichever truck passes closest to them. It's shown as “Truck 2 (extra)” on the crews and the schedule. Off until you turn it on."]},
  {v:"2026.11.11-b",date:"Nov 11, 2026",added:["New “🚚 Make driver” button: when a job has more than one crew lead, tap it next to the lead you want driving the truck. It stays that way when you rebuild, like a 🔒 lock (tap the lock to undo)."],fixed:["When a job had two crew leads, the one living closest to the job always got the truck, even when the other lead lived next to the workers. Now the app picks the driver that makes the least driving for the whole crew, so people near the other lead can ride along instead of driving themselves."]},
  {v:"2026.11.11-a",date:"Nov 11, 2026",added:["Simpler layout with four tabs: Today, Workers, History and ⚙ Settings. Crew rules and How to are now inside Settings.","Today walks you through 3 steps: load jobs, who's working, build crews & send. After crews are built, the first two steps fold up into a one-line summary (tap Edit to open them again).","A bar at the bottom of Today always shows the next thing to do: Open job file, Build crews, or Copy schedule.","Copy schedule now sits at the end of the crews too, so you don't have to scroll back up to send.","Rarely used buttons (Paste titles, Start new day, Download CSV, Clear crews) are under “More”.","Can't work together and Work well together moved to the Workers tab, and each worker's profile shows their pairs.","Backup & restore has one home: Settings → Backup & restore.","How-to topics, What's new and the support pack are in Settings → Help.","Phoenix Spirit Group logo at the top, and as the icon when you add the app to your home screen."],fixed:["How-to said pickups happen within 2 miles of the lead's route. It now says the real rule: when picking up adds no more than 10 minutes (adjustable)."]},
  {v:"2026.11.09-j",date:"Nov 9, 2026",added:["Load jobs from a support pack: Today → Open job file, pick the pack (.zip). The jobs come back as they were — report times, addresses, map spots, trucks, crew sizes, requested and don't-send people, notes and who's off. It also offers to load the pack's workers."]},
@@ -170,7 +171,7 @@ function logEvent(type,msg,extra){
 window.addEventListener("error",e=>logEvent("error",e.message,{src:(e.filename||"").split("/").pop(),line:e.lineno,col:e.colno,stack:e.error&&e.error.stack?String(e.error.stack).slice(0,800):""}));
 window.addEventListener("unhandledrejection",e=>logEvent("error","Unhandled: "+(e.reason&&e.reason.message||e.reason),{stack:e.reason&&e.reason.stack?String(e.reason.stack).slice(0,800):""}));
 logEvent("open","App opened",{version:APP_VERSION});
-const DEFAULT_SETTINGS={defaultCrew:2,maxMiles:0,maxLeadMiles:0,roadFactor:1.25,leadsAsHelpers:true,pickupMiles:2,pickupMin:10,allowStores:false,arriveEarly:15,stopMinutes:5,avgMph:40};
+const DEFAULT_SETTINGS={defaultCrew:2,maxMiles:0,maxLeadMiles:0,roadFactor:1.25,leadsAsHelpers:true,extraTruck:false,pickupMiles:2,pickupMin:10,allowStores:false,arriveEarly:15,stopMinutes:5,avgMph:40};
 /* A lead's own limit (set on the lead) wins over the default. 0 = no limit. */
 const leadLimit=w=>{const own=+(w&&w.maxMiles)||0;return own>0?own:(+S().maxLeadMiles||0)};
 let roster={workers:[],conflicts:[],prefers:[],settings:{...DEFAULT_SETTINGS}};
@@ -1134,15 +1135,33 @@ function trucksFor(j,crew){
   const dPair=(h,l)=>hasLoc(h)&&hasLoc(l)?pairMin(h,l,j):1e9;
   const forced=w=>isDriver(w.id,j.id);
   const leadPen=w=>{const L=leadLimit(w);return L&&hasLoc(w)&&travel(w,j).mi>L&&tonight.locks[w.id]!==j.id?1e6:0};
-  const {truckLeads,extra,hs,of}=pairCrew(people.filter(w=>w.lead),people.filter(w=>!w.lead),T,P,dJob,dPair,forced,leadPen);
-  const trucks=[];for(let i=0;i<T;i++)trucks.push({lead:truckLeads[i]||null,crew:[]});
-  const loose=[];
-  for(const h of hs){if(of.has(h))trucks[of.get(h)].crew.push(h);else loose.push(h)}
-  for(const h of loose){let t=trucks.find(t=>!t.lead&&t.crew.length<P-1)||trucks.find(t=>!t.lead)||trucks.reduce((a,b)=>a.crew.length<=b.crew.length?a:b);t.crew.push(h)}
-  // order each truck's workers by where they join along the route
-  trucks.forEach(t=>{if(t.lead&&hasLoc(t.lead))t.crew.sort((a,b)=>(hasLoc(a)?meetPoint(a,t.lead,j).t:2)-(hasLoc(b)?meetPoint(b,t.lead,j).t:2))});
-  return {trucks,spareLeads:extra};
+  const split=Tn=>{
+    const {truckLeads,extra,hs,of}=pairCrew(people.filter(w=>w.lead),people.filter(w=>!w.lead),Tn,P,dJob,dPair,forced,leadPen);
+    const trucks=[];for(let i=0;i<Tn;i++)trucks.push({lead:truckLeads[i]||null,crew:[]});
+    const loose=[];
+    for(const h of hs){if(of.has(h))trucks[of.get(h)].crew.push(h);else loose.push(h)}
+    for(const h of loose){let t=trucks.find(t=>!t.lead&&t.crew.length<P-1)||trucks.find(t=>!t.lead)||trucks.reduce((a,b)=>a.crew.length<=b.crew.length?a:b);t.crew.push(h)}
+    // order each truck's workers by where they join along the route
+    trucks.forEach(t=>{if(t.lead&&hasLoc(t.lead))t.crew.sort((a,b)=>(hasLoc(a)?meetPoint(a,t.lead,j).t:2)-(hasLoc(b)?meetPoint(b,t.lead,j).t:2))});
+    return {trucks,spareLeads:extra};
+  };
+  const base=split(T);
+  // Extra truck (setting, off by default): a spare lead brings their own truck when that saves the crew real driving.
+  if(!S().extraTruck||!base.spareLeads.length||base.trucks.some(t=>!t.lead))return base;
+  const alt=split(T+1);
+  if(alt.trucks.some(t=>!t.lead||!hasLoc(t.lead)))return base;
+  const crewMin=r=>{let m=0;for(const t of r.trucks){m+=dJob(t.lead);for(const w of t.crew){const g=legFor(j,w,t);m+=g?(g.kind==="pickup"?(g.addMin||0):g.min):0}}return m};
+  const saved=crewMin(base)-crewMin(alt);
+  // worth it if it saves real driving, or if a spare lead is driving to the job on their own anyway
+  const alone=base.trucks.some(t=>t.crew.some(w=>base.spareLeads.includes(w)&&["atjob","job"].includes(legFor(j,w,t)?.kind)));
+  if(saved<EXTRA_TRUCK_MIN&&!(alone&&saved>-1))return base;
+  const baseLeads=new Set(base.trucks.map(t=>t.lead));
+  let k=alt.trucks.findIndex(t=>!baseLeads.has(t.lead));if(k<0)k=alt.trucks.length-1;
+  alt.trucks[k].extra=true;alt.trucks.push(...alt.trucks.splice(k,1));alt.saved=saved;
+  return alt;
 }
+const EXTRA_TRUCK_MIN=10;
+const truckLabel=(t,k)=>`Truck ${k+1}${t.extra?" (extra)":""}`;
 /* How one person gets to the job:
    lead  → drives home to job
    pickup→ lead swings by their home (they're on the way)
@@ -1188,10 +1207,11 @@ function jobIssues(j,crew){
     else if(!crew.includes(wid))iss.push(["warn",`${w.name} was requested for this job but is assigned elsewhere`]);}
   for(let a=0;a<crew.length;a++)for(let b=a+1;b<crew.length;b++)if(cs.has(pairKey(crew[a],crew[b])))iss.push(["bad",`${wById(crew[a])?.name} and ${wById(crew[b])?.name} can't work together`]);
   const T=jTrucks(j),P=jPer(j);
-  const {trucks,spareLeads}=trucksFor(j,crew);
+  const {trucks,spareLeads,saved}=trucksFor(j,crew);
+  const xt=trucks.find(t=>t.extra);if(xt)iss.push(["good",saved>=EXTRA_TRUCK_MIN?`${xt.lead.name} brings an extra truck — saves the crew about ${fmtDur(saved)} of driving`:`${xt.lead.name} brings their truck as an extra — they were driving to the job on their own anyway`]);
   const noLead=trucks.filter(t=>!t.lead).length;
   if(noLead)iss.push(["bad",noLead===T?(T>1?`No crew leads — all ${T} trucks need one`:"No crew lead — this truck can't go out"):`${noLead} of ${T} trucks still need a crew lead`]);
-  const helpers=trucks.reduce((n,t)=>n+t.crew.length,0),needH=T*(P-1);
+  const helpers=trucks.reduce((n,t)=>n+t.crew.length+(t.extra?1:0),0),needH=T*(P-1);
   if(helpers<needH)iss.push(["warn",`Needs ${needH-helpers} more worker${needH-helpers>1?"s":""}`]);
   if(helpers>needH)iss.push(["warn",`${helpers-needH} more than needed`]);
   spareLeads.forEach(w=>iss.push(["warn",`${w.name} (lead) is riding as a worker — their truck stays parked`]));
@@ -1386,7 +1406,7 @@ function rResults(){
   const free=avail.filter(w=>!used.has(w.id));
   let need=0,filled=0,tot=0,cnt=0,prob=0;
   let tNeed=0,tGo=0,anyEst=false;
-  jobs.forEach(j=>{const c=asg[j.id];const T=jTrucks(j),P=jPer(j);const {trucks}=trucksFor(j,c);tNeed+=T;tGo+=trucks.filter(t=>t.lead).length;need+=T*P;filled+=Math.min(c.length,T*P);trucks.forEach(t=>[t.lead,...t.crew].forEach(w=>{const g=w&&legFor(j,w,t);if(g){tot+=g.kind==="pickup"?0:g.min;cnt++;if(!g.real)anyEst=true}}));if(jobIssues(j,c).length)prob++});
+  jobs.forEach(j=>{const c=asg[j.id];const T=jTrucks(j),P=jPer(j);const {trucks}=trucksFor(j,c);tNeed+=T;tGo+=trucks.filter(t=>t.lead&&!t.extra).length;need+=T*P;filled+=Math.min(c.length,T*P);trucks.forEach(t=>[t.lead,...t.crew].forEach(w=>{const g=w&&legFor(j,w,t);if(g){tot+=g.kind==="pickup"?0:g.min;cnt++;if(!g.real)anyEst=true}}));if(jobIssues(j,c).some(x=>x[0]!=="good"))prob++});
   let h=`<div class="stats"><div class="stat"><b>${tGo}/${tNeed}</b><span>trucks with a lead</span></div><div class="stat"><b>${filled}/${need}</b><span>spots filled</span></div><div class="stat"><b>${cnt?(anyEst?"≈":"")+fmtDur(tot/cnt):"–"}</b><span>avg. drive each</span></div><div class="stat"><b>${free.length}</b><span>not assigned</span></div><div class="stat"><b>${prob}</b><span>jobs to check</span></div></div>`;
   if(!prob)h+=`<div class="good">Every truck has a lead and a full crew, with no conflicts.</div>`;
   if(routeLastErr)h+=`<div class="warn">${esc(routeLastErr)}</div>`;
@@ -1404,14 +1424,15 @@ function rResults(){
         extra=`<div class="small" style="padding:0 0 6px 2px">${m?`📍 <a href="${gmap(m.lat,m.lng)}" target="_blank" rel="noopener">${esc(m.name)}</a> · <a href="#" data-act="spot" data-w="${w.id}" data-j="${j.id}">change</a>`:`<a href="#" data-act="spot" data-w="${w.id}" data-j="${j.id}">Pick a meet spot</a> <span class="muted">(optional)</span>`}</div>`}
       if(role!=="lead"&&g&&g.kind==="pickup"&&w.address)extra=`<div class="small muted" style="padding:0 0 6px 2px">Pickup: ${esc(w.address)}</div>`;
       return `<div class="mem"><span class="n">${esc(w.name)}${role==="lead"?`<span class="tag lead">lead · truck</span>${isDriver(w.id,j.id)?`<span class="tag lock">driver picked by you</span>`:""}`:w.lead?`<span class="tag">lead, as worker</span>`:""}${(j.requested||[]).includes(w.id)?`<span class="tag lock">requested</span>`:""}${g?`<div class="small muted" style="margin-top:1px">${legText(g,pp)}</div>`:""}</span>${role!=="lead"&&w.lead?`<button class="x" data-act="mkDriver" data-w="${w.id}" data-j="${j.id}" title="${esc(first(w.name))} drives the truck" style="font-size:12px;width:auto;padding:0 6px;white-space:nowrap">🚚 Make driver</button>`:""}<button class="x" data-act="lock" data-w="${w.id}" data-j="${j.id}" title="${lk?"Unlock":"Keep on this job"}" style="font-size:15px;opacity:${lk?1:.45}">${lk?"🔒":"🔓"}</button><button class="x" data-act="unassign" data-w="${w.id}" data-j="${j.id}" title="Remove">×</button></div>${extra}`};
-    trucksFor(j,crew).trucks.forEach((t,k)=>{
+    const tk=trucksFor(j,crew).trucks;let openLeft=Math.max(0,T*P-crew.length-tk.filter(t=>!t.lead).length);
+    tk.forEach((t,k,all)=>{
       const pl=planTruck(j,t);
-      h+=`<div style="margin-top:${k?8:0}px">${T>1?`<div class="small" style="font-weight:600">Truck ${k+1}</div>`:""}`;
+      h+=`<div style="margin-top:${k?8:0}px">${all.length>1?`<div class="small" style="font-weight:600">${truckLabel(t,k)}</div>`:""}`;
       if(pl&&pl.leave!=null)h+=`<div class="small" style="background:var(--chip);border-radius:8px;padding:4px 8px;margin:2px 0 4px">🚚 Leaves ${fmtClock(pl.leave)} → on site ${approx(pl.real)}${fmtClock(pl.arrive)} <span class="muted">(${S().arriveEarly} min before ${esc(j.time)}${pl.stops.length?` · ${pl.stops.length} stop${pl.stops.length>1?"s":""}`:""})</span></div>`;
       else if(pl&&j.time==null)h+=``;
       h+=t.lead?mem(t.lead,"lead",t,pl):`<div class="mem"><span class="n" style="color:var(--bad)">Needs a crew lead</span></div>`;
       t.crew.forEach(w=>h+=mem(w,"worker",t,pl));
-      for(let q=t.crew.length;q<P-1;q++)h+=`<div class="mem"><span class="n muted small">Open worker spot</span></div>`;
+      if(!t.extra)for(let q=t.crew.length;q<P-1&&openLeft>0;q++,openLeft--)h+=`<div class="mem"><span class="n muted small">Open worker spot</span></div>`;
       h+=`</div>`;
     });
     h+=`</div>`+iss.map(([k,m])=>`<div class="${k}">${esc(m)}</div>`).join("");
@@ -1521,7 +1542,8 @@ function rSettings(){
   <div class="row" style="margin-top:8px"><label class="f grow" style="margin:0">Road factor (straight-line × this ≈ road miles)</label><input type="number" min="1" max="2" step="0.05" data-set="roadFactor" value="${s.roadFactor}"></div>
   <p class="small muted" style="margin:10px 0 4px">Every truck always needs one crew lead.</p>
   <label class="row small" style="margin-bottom:6px"><input type="checkbox" data-set="allowStores" ${s.allowStores?"checked":""}> Meet spot search: include store &amp; gas station lots (Walmart, Food Lion…)</label>
-  <label class="row small"><input type="checkbox" data-set="leadsAsHelpers" ${s.leadsAsHelpers?"checked":""}> If there are spare leads, let them fill worker spots (their truck stays parked)</label></div>`
+  <label class="row small" style="margin-bottom:6px"><input type="checkbox" data-set="leadsAsHelpers" ${s.leadsAsHelpers?"checked":""}> If there are spare leads, let them fill worker spots (their truck stays parked)</label>
+  <label class="row small"><input type="checkbox" data-set="extraTruck" ${s.extraTruck?"checked":""}> If a job has a spare lead, let them bring their own truck as an extra truck when they'd drive to the job alone anyway, or when it saves the crew at least ${EXTRA_TRUCK_MIN} min of driving</label></div>`
   +`<h3 class="secHd">Connections</h3>`+rRouteSettings()+rAISettings()
   +`<h3 class="secHd">Your data</h3>`+rBackupCard()
   +rHelpCard()
@@ -1570,6 +1592,7 @@ function rHelp(){
   <details class="hsec"><summary>🤖 AI assistant (optional)</summary><p class="small">With a Claude API key saved under <b>Settings → AI assistant</b>: <b>Read job notes with AI</b> pulls trucks, crew size, requested and “don't send” people and important notes out of messy calendar text. After building crews, <b>Review with AI</b> looks for problems and better swaps — type anything special for today (who has to leave early, who to keep off a job) and it takes that into account. Each suggestion has an <b>Apply</b> button; applied people are locked 🔒 so a rebuild keeps them. Only names, jobs, distances and rules are sent — never addresses or phone numbers.</p></details>
   <details class="hsec"><summary>How the matching works</summary><p class="small">Each crew lead drives the company truck from their home to the job, and the job's distance is measured from the lead's home. Workers join the truck along the way. If picking a worker up at home adds no more than ${esc(S().pickupMin)} minutes to the lead's drive (set in Settings), the lead picks them up. Otherwise the worker drives to a point on the lead's route and leaves their car there. So the tool pairs each worker with the lead whose route passes closest to their home, and fills lead spots first, then worker spots.</p>
   <p class="small"><b>Two leads on one truck:</b> only one drives. The app picks the lead that makes the least driving for the whole crew (for example, the lead who lives near the workers, so they can ride along). To choose yourself, tap <b>🚚 Make driver</b> next to that lead on the crew card; it stays when you rebuild (tap 🔒 to undo).</p>
+  <p class="small"><b>Extra truck (optional):</b> with “let them bring their own truck” on in Settings, a spare lead on a job drives their own company truck as <b>Truck 2 (extra)</b> when they'd otherwise drive to the job alone, or when it saves the crew at least ${EXTRA_TRUCK_MIN} minutes of driving (for example, a worker who lives near them rides along instead of driving far). The crew size stays the same; workers go with whichever truck passes closest to them. At most one extra truck per job.</p>
   <p class="small"><b>Lead range:</b> a crew lead is never sent to a job farther from their home than the max distance in Settings (or their own limit, set in their Workers profile). If no available lead is in range, the job shows a note so you can raise a limit or assign someone by hand.</p>
   <p class="small"><b>Meet spots:</b> tap “Pick a meet spot” under a worker to see nearby Park &amp; Ride lots and public parking. Those are meant for leaving a car all day. Store, gas station and restaurant lots (Walmart, Food Lion…) are left out by default because they often tow; tick “Include store &amp; gas station lots” to see them too, marked with a warning. Always check posted signs.</p>
   <p class="small"><b>Requested crew:</b> if a calendar event names people from your roster — full names anywhere, or first/last names after “Req:”, “Request:”, “Need:”, “Crew:” or “Lead:” (e.g. <code>Req: Marcus, Lena</code>) — they're put on that job automatically and tagged “requested”. You can also tap a job and pick requested people by hand. If a requested person is marked off, the job shows a red note.</p>
@@ -1585,9 +1608,9 @@ function scheduleText(){
   tonight.jobs.forEach(j=>{const c=tonight.assign?.[j.id];if(!c)return;const T=jTrucks(j);
     t+=`\n${j.time?j.time+" · ":""}${j.name}${j.address?" — "+j.address:""}${T>1?` (${T} trucks)`:""}\n`;
     if(!c.length){t+="  (no one assigned)\n";return}
-    trucksFor(j,c).trucks.forEach((tr,k)=>{
+    trucksFor(j,c).trucks.forEach((tr,k,all)=>{
       const ppl=[tr.lead?`${tr.lead.name} (lead)${tr.lead.phone?" "+tr.lead.phone:""}`:"NEEDS LEAD",...tr.crew.map(w=>w.name+(w.phone?" "+w.phone:""))];
-      t+=`  ${T>1?`Truck ${k+1}: `:"• "}${ppl.join(", ")}\n`;
+      t+=`  ${all.length>1?`${truckLabel(tr,k)}: `:"• "}${ppl.join(", ")}\n`;
       if(!tr.lead)return;
       const pl=planTruck(j,tr);const gl=legFor(j,tr.lead,tr);const A=pl&&!pl.real?"about ":"";
       if(pl&&pl.leave!=null)t+=`    ${first(tr.lead.name)}: leave ${fmtClock(pl.leave)} → on site ${A}${fmtClock(pl.arrive)}${gl?` (${fmtDur(gl.min)} drive)`:""}\n`;
@@ -1612,10 +1635,10 @@ function scheduleCSV(){
     if(!c.length){rows.push([j.time||"",j.name,j.address,"","","","","","","","","","","",""]);return}
     trucksFor(j,c).trucks.forEach((tr,k)=>{
       const pl=planTruck(j,tr);
-      if(tr.lead){const g=legFor(j,tr.lead,tr);rows.push([j.time||"",j.name,j.address,k+1,"Lead",tr.lead.name,tr.lead.phone||"",how.lead,pl&&pl.leave!=null?fmtClock(pl.leave):"","","","",g?Math.round(g.min):"",g?fmtMi(g.mi):"",g&&!g.real?"yes":""])}
-      else rows.push([j.time||"",j.name,j.address,k+1,"Lead","(needs lead)","","","","","","","","",""]);
+      if(tr.lead){const g=legFor(j,tr.lead,tr);rows.push([j.time||"",j.name,j.address,tr.extra?(k+1)+" (extra)":k+1,"Lead",tr.lead.name,tr.lead.phone||"",how.lead,pl&&pl.leave!=null?fmtClock(pl.leave):"","","","",g?Math.round(g.min):"",g?fmtMi(g.mi):"",g&&!g.real?"yes":""])}
+      else rows.push([j.time||"",j.name,j.address,tr.extra?(k+1)+" (extra)":k+1,"Lead","(needs lead)","","","","","","","","",""]);
       tr.crew.forEach(w=>{const g=legFor(j,w,tr);const pp=pl&&pl.people[w.id]||{};const pt=g&&g.spot?g.spot:(g&&g.kind==="meet"?g.point:null);
-        rows.push([j.time||"",j.name,j.address,k+1,"Worker",w.name,w.phone||"",g?how[g.kind]:"",pp.leave!=null?fmtClock(pp.leave):"",pp.ready!=null?fmtClock(pp.ready):pp.meet!=null?fmtClock(pp.meet):"",g&&g.spot?g.spot.name:"",pt?gmap(pt.lat,pt.lng):"",g&&g.kind!=="pickup"?Math.round(g.min):"",g&&g.kind!=="pickup"?fmtMi(g.mi):"",g&&!g.real?"yes":""])});
+        rows.push([j.time||"",j.name,j.address,tr.extra?(k+1)+" (extra)":k+1,"Worker",w.name,w.phone||"",g?how[g.kind]:"",pp.leave!=null?fmtClock(pp.leave):"",pp.ready!=null?fmtClock(pp.ready):pp.meet!=null?fmtClock(pp.meet):"",g&&g.spot?g.spot.name:"",pt?gmap(pt.lat,pt.lng):"",g&&g.kind!=="pickup"?Math.round(g.min):"",g&&g.kind!=="pickup"?fmtMi(g.mi):"",g&&!g.real?"yes":""])});
     });
   });
   return rows.map(r=>r.map(q).join(",")).join("\n");
@@ -1728,7 +1751,7 @@ function crewsForAI(){
       lines.push(`  Truck ${k+1}: ${t.lead?`${t.lead.name} (lead, ${fmtDur(travel(t.lead,j).min)} home→job${pl&&pl.leave!=null?`, leaves ${fmtClock(pl.leave)}, on site ${fmtClock(pl.arrive)}`:""})`:"NO LEAD"}`);
       t.crew.forEach(w=>{const g=legFor(j,w,t);lines.push(`    - ${w.name}${w.lead?" (a lead riding as worker)":""}: ${g?{pickup:`picked up at home (adds ${fmtDur(g.addMin||0)} to the lead's drive)`,meet:`drives ${fmtDur(g.min)} to meet the truck`,atlead:`drives ${fmtDur(g.min)} to the lead's home`,atjob:`drives ${fmtDur(g.min)} to the job`,job:`drives ${fmtDur(g.min)} to the job`}[g.kind]:"no location"}${tonight.locks[w.id]===j.id?" [locked]":""}`)});
     });
-    const iss=jobIssues(j,c);if(iss.length)lines.push(`  Problems: ${iss.map(i=>i[1]).join("; ")}`);
+    const iss=jobIssues(j,c).filter(x=>x[0]!=="good");if(iss.length)lines.push(`  Problems: ${iss.map(i=>i[1]).join("; ")}`);
   }
   const off=new Set(tonight.off);
   const free=roster.workers.filter(w=>w.active!==false&&!off.has(w.id)&&!used.has(w.id));
@@ -1857,7 +1880,7 @@ function snapshotJobs(){
   const out=[];
   for(const j of tonight.jobs){
     const c=tonight.assign&&tonight.assign[j.id];if(!c)continue;
-    const trucks=trucksFor(j,c).trucks.map((t,k)=>({truck:k+1,lead:t.lead?{id:t.lead.id,name:t.lead.name}:null,
+    const trucks=trucksFor(j,c).trucks.map((t,k)=>({truck:k+1,...(t.extra?{extra:true}:{}),lead:t.lead?{id:t.lead.id,name:t.lead.name}:null,
       workers:t.crew.map(w=>{const g=legFor(j,w,t);const m=t.lead&&meetFor(w.id,t.lead.id,j.id);const pl=planTruck(j,t);const pp=pl&&pl.people[w.id]||{};
         const tm=pp.ready!=null?" "+fmtClock(pp.ready):pp.meet!=null?" "+fmtClock(pp.meet):"";
         return {id:w.id,name:w.name,how:g?({pickup:"Picked up at home"+tm,meet:(m?"Met truck at "+m.name:"Met truck along the way")+tm,atlead:"Met at lead's home",atjob:"Met at job",job:"Drove to job"}[g.kind]||""):""}})}));
@@ -2098,7 +2121,7 @@ async function supportPack(){
   let lastImport=null;try{lastImport=JSON.parse(localStorage.getItem("crew_lastimport"))}catch(e){}
   let geo={};try{geo=JSON.parse(localStorage.getItem("crew_geo"))||{}}catch(e){}
   const issues=tonight.assign?tonight.jobs.filter(j=>tonight.assign[j.id]).map(j=>{const c=tonight.assign[j.id];const iss=jobIssues(j,c);
-    return `${j.time||""} ${j.name}\n${trucksFor(j,c).trucks.map((t,k)=>`  Truck ${k+1}: ${t.lead?t.lead.name+" (lead)":"NO LEAD"}${t.crew.map(w=>{const g=legFor(j,w,t);return ", "+w.name+(g?" ["+g.kind+" ~"+fmtMi(g.mi)+" mi]":"")}).join("")}`).join("\n")}\n${iss.length?iss.map(i=>"  ! "+i[1]).join("\n"):"  (no issues)"}`}).join("\n\n"):"Crews not built yet.";
+    return `${j.time||""} ${j.name}\n${trucksFor(j,c).trucks.map((t,k)=>`  ${truckLabel(t,k)}: ${t.lead?t.lead.name+" (lead)":"NO LEAD"}${t.crew.map(w=>{const g=legFor(j,w,t);return ", "+w.name+(g?" ["+g.kind+" ~"+fmtMi(g.mi)+" mi]":"")}).join("")}`).join("\n")}\n${iss.length?iss.map(i=>"  ! "+i[1]).join("\n"):"  (no issues)"}`}).join("\n\n"):"Crews not built yet.";
   let ls=true;try{localStorage.setItem("crew_t","1");localStorage.removeItem("crew_t")}catch(e){ls=false}
   const env={appVersion:APP_VERSION,savedSpots:Object.keys(places).length,censusReachable:!censusDown,packedAt:now.toISOString(),timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,userAgent:navigator.userAgent,
     screen:`${screen.width}x${screen.height} @${devicePixelRatio}x`,where:location.protocol==="file:"?"local file":location.host||"claude page",

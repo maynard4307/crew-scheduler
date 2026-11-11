@@ -4,7 +4,7 @@
 
 - Live app: https://maynard4307.github.io/crew-scheduler/
 - Repository: https://github.com/maynard4307/crew-scheduler (public; GitHub Pages from `main`, root)
-- Current version: **2026.11.11-b** (shown in the app's top bar; tap it for What's new)
+- Current version: **2026.11.11-c** (shown in the app's top bar; tap it for What's new)
 - Owner: maynard4307 · Primary user: the owner's brother (dispatcher, iPhone + PC)
 
 ## 1. What it's for
@@ -34,6 +34,7 @@ Tabs: **Today · Workers · History · ⚙ Settings** (since 2026.11.11-a; befor
 
 - Every truck needs **exactly one crew lead**; other people on the truck are workers. A job can need several trucks. "Per truck" counts the lead.
 - When a job has more leads than trucks, the driver is the lead that makes the **least total driving for the crew** (lead's drive + each worker's way to the truck), not simply the lead closest to the job. Leads past their mile limit are only picked if locked by hand. The dispatcher can override with **🚚 Make driver** (sticks while that person is locked to the job).
+- **Extra truck** (setting `extraTruck`, default off): a job with a spare lead may send one extra truck (at most one per job) driven by that lead, when the spare lead would drive to the job alone anyway or it saves the crew ≥ `EXTRA_TRUCK_MIN` (10) min. Crew size doesn't change; workers go with the closest truck. Shown as "Truck N (extra)". Decided in `trucksFor` (display/schedule only; the solver doesn't add leads to get one).
 - The lead drives the truck **from home to the job**; the job distance/time is measured from the lead's home.
 - Workers either get **picked up at home** (if it adds ≤ `pickupMin` minutes to the lead's drive, default 10) or **meet the truck along the lead's route**. If the meet point is basically at the job (meeting saves < 5 min, or the point is < 10 min from the job), the worker drives to the job. If the worker lives "behind" the lead, they meet at the lead's home.
 - Workers are matched to the lead whose route passes closest to them (by minutes).
@@ -82,7 +83,7 @@ On the Claude artifact the roster/today also sync through the artifact database 
 - Geocoding: `geocodeAddress` (saved spot `placeGet` → `geoCandidates`: cleaned address via `cleanAddr`/`hwyVariants`, then road without house number, ZIP, town → `geoAll` asks every service → `geoFit` keeps the result in the typed town/ZIP and within `FAR_MI` of the crew; otherwise the best fallback), `geocodeMissing`, saved spots `placeSave`/`placeForget` (saved when a location is pasted by hand; forgotten when the user clears it). "Look up again" (`refindJobs`/`refindWorkers`) retries orange ones and keeps the old spot if nothing better is found. Location checks: `locWarn` (wrong town vs. the typed address, town-center-only match, or > `FAR_MI` (75) mi from every worker), shown in orange on job/worker lists and forms, a Today banner, and `jobIssues`. Jobs/workers keep the full lookup label in `geoLabel`; "Set by hand" locations are never flagged.
 - Routing: `travel` (cached real time or estimate), `ors`, `orsMatrix`, `orsRoute`, `warmBeforeSolve`, `warmPlans`, `planPairs`, `meetPoint`
 - Matching: `solve` → `solveInner` (greedy: leads → workers → spare leads, then local search with moves/swaps/chains, ~6–24 random restarts), `pairCrew` (also picks which leads drive when there are extra leads: tries each choice, up to 8 leads, lowest total minutes; honors `forced` = Make driver, `leadPen` = past mile limit), `jobScore`
-- Per-truck view: `trucksFor`, `legFor` (lead / pickup / meet / atlead / atjob / job), `planTruck` (leave-by timeline), `jobIssues`
+- Per-truck view: `trucksFor` (also the optional extra truck: compares crew minutes with T vs T+1 trucks via `legFor`; `truckLabel`), `legFor` (lead / pickup / meet / atlead / atjob / job), `planTruck` (leave-by timeline), `jobIssues`
 - Layout: `render` (tabs `tonight`/`workers`/`history`/`settings`), `rTonight` with `stepWrap` (collapsible steps, `todayOpen` overrides, reset on build/new day), `moreMenu`, `rActionBar` (bottom bar), `goSettings(cardId, openId)` for links into Settings; Settings = `rSettings` → `rRouteSettings`, `rAISettings`, `rBackupCard`, `rHelpCard` (wraps `rHelp` sections as `<details>`), `rDeleteCard`; pair lists `rPairs` on Workers
 - Output: `rResults`, `scheduleText`, `scheduleCSV`, `rMap`
 - History: `saveDayToHistory`, `histEdit`, `rHistory`, `rHistDay`, `rHistSearch`, `historyCSV`, `fileConnect`/`fileSync`, `mergeHistory`
@@ -143,3 +144,4 @@ Never commit backups, support packs, CSVs or keys (`.gitignore` blocks `*.json`,
 | Nov 9, 2026 | Backup files opened with Import list are restored as backups (not read as CSV); older backups (version 2, `pickupMiles` setting) still load |
 | Nov 11, 2026 | Simpler layout: 4 tabs (Today · Workers · History · ⚙ Settings); Today is a guided 1-2-3 with collapsing steps and a bottom action bar; pair rules on Workers; one home for backup. Built as a preview branch first for the owner to try |
 | Nov 11, 2026 | Extra leads on a job: driver = least total crew driving (was: closest to the job), plus a Make driver override. Found from a Siler City job where the Asheboro-area lead drove and two Fayetteville people (one a lead) each drove ~65 mi alone |
+| Nov 11, 2026 | Optional extra truck for a spare lead (off by default): only when they'd drive alone anyway or it saves ≥ 10 min; max one per job; crew size unchanged |
