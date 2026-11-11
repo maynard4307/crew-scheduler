@@ -2,6 +2,14 @@
 
 Tap the version number at the top of the app to see this inside Crew Scheduler.
 
+## 2026.11.11-b — Nov 11, 2026
+
+**New**
+- New “🚚 Make driver” button: when a job has more than one crew lead, tap it next to the lead you want driving the truck. It stays that way when you rebuild, like a 🔒 lock (tap the lock to undo).
+
+**Fixed**
+- When a job had two crew leads, the one living closest to the job always got the truck, even when the other lead lived next to the workers. Now the app picks the driver that makes the least driving for the whole crew, so people near the other lead can ride along instead of driving themselves.
+
 ## 2026.11.11-a — Nov 11, 2026
 
 **New**

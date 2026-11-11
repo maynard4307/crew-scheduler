@@ -137,9 +137,10 @@ details.hsec>summary{font-weight:600;cursor:pointer;padding:4px 0}
 <script>
 "use strict";
 /* ---------- state ---------- */
-const APP_VERSION="2026.11.11-a";
+const APP_VERSION="2026.11.11-b";
 /* Release notes — newest first. Add an entry here with every update. */
 const CHANGELOG=[
+ {v:"2026.11.11-b",date:"Nov 11, 2026",added:["New “🚚 Make driver” button: when a job has more than one crew lead, tap it next to the lead you want driving the truck. It stays that way when you rebuild, like a 🔒 lock (tap the lock to undo)."],fixed:["When a job had two crew leads, the one living closest to the job always got the truck, even when the other lead lived next to the workers. Now the app picks the driver that makes the least driving for the whole crew, so people near the other lead can ride along instead of driving themselves."]},
  {v:"2026.11.11-a",date:"Nov 11, 2026",added:["Simpler layout with four tabs: Today, Workers, History and ⚙ Settings. Crew rules and How to are now inside Settings.","Today walks you through 3 steps: load jobs, who's working, build crews & send. After crews are built, the first two steps fold up into a one-line summary (tap Edit to open them again).","A bar at the bottom of Today always shows the next thing to do: Open job file, Build crews, or Copy schedule.","Copy schedule now sits at the end of the crews too, so you don't have to scroll back up to send.","Rarely used buttons (Paste titles, Start new day, Download CSV, Clear crews) are under “More”.","Can't work together and Work well together moved to the Workers tab, and each worker's profile shows their pairs.","Backup & restore has one home: Settings → Backup & restore.","How-to topics, What's new and the support pack are in Settings → Help.","Phoenix Spirit Group logo at the top, and as the icon when you add the app to your home screen."],fixed:["How-to said pickups happen within 2 miles of the lead's route. It now says the real rule: when picking up adds no more than 10 minutes (adjustable)."]},
  {v:"2026.11.09-j",date:"Nov 9, 2026",added:["Load jobs from a support pack: Today → Open job file, pick the pack (.zip). The jobs come back as they were — report times, addresses, map spots, trucks, crew sizes, requested and don't-send people, notes and who's off. It also offers to load the pack's workers."]},
  {v:"2026.11.09-i",date:"Nov 9, 2026",added:["Smarter address lookup: messy addresses are cleaned up first (like “1891-1801 NC-24” → “1891 NC Highway 24”), more free map services are asked (US Census, and OpenRouteService if your routing key is set), and the result in the town or ZIP you typed is picked — not one far away.","If the house can't be found, it falls back to the road, then the ZIP code area, before the town center.","Fixed spots are remembered: when you paste the right location for an address, every later job or worker with that address uses it automatically. Saved spots are included in backups.","“Look up again” button for jobs and workers marked in orange."]},
@@ -195,7 +196,7 @@ function normalize(){
   if(roster.settings&&roster.settings.maxLeadMiles===undefined)roster.settings.maxLeadMiles=roster.settings.maxMiles||0;
   roster.settings={...DEFAULT_SETTINGS,...(roster.settings||{})};
   delete roster.settings.requireLead;
-  tonight.jobs=tonight.jobs||[];tonight.jobs.forEach(j=>{if(!j.trucks)j.trucks=1});tonight.locks=tonight.locks||{};tonight.off=tonight.off||[];
+  tonight.jobs=tonight.jobs||[];tonight.jobs.forEach(j=>{if(!j.trucks)j.trucks=1});tonight.locks=tonight.locks||{};tonight.off=tonight.off||[];tonight.drivers=tonight.drivers||{};
 }
 function save(which){
   const obj=which==="roster"?roster:tonight;
@@ -921,21 +922,44 @@ function routePoint(W,A,B){
   return {t,d:Math.hypot(wx-px,wy-py),lat:A.lat+py/m,lng:A.lng+px/k};
 }
 /* The lead's truck drives from the lead's home to the job; workers join along the way.
-   pairCrew picks the truck leads (closest to the job) and gives each worker the nearest lead with room.
    Used by both the solver and the display so they always agree. */
-function pairCrew(leads,helpers,T,P,dJob,dPair){
+/* Split a job's people into trucks. When there are more leads than trucks, the drivers are the leads that make the
+   whole crew's driving the least (lead's own drive + each worker's way to the truck), not just the leads closest to the job.
+   forced(l): the dispatcher picked this lead to drive ("Make driver"). leadPen(l): extra cost, e.g. past the lead's mile limit. */
+function pairCrew(leads,helpers,T,P,dJob,dPair,forced,leadPen){
   const ls=[...leads].sort((a,b)=>dJob(a)-dJob(b));
-  const truckLeads=ls.slice(0,T), extra=ls.slice(T);
-  const hs=[...helpers,...extra];
-  const room=truckLeads.map(()=>P-1), of=new Map();
-  if(truckLeads.length&&P>1){
-    const pairs=[];
-    for(const h of hs)truckLeads.forEach((l,k)=>pairs.push([h,k,dPair(h,l)]));
-    pairs.sort((a,b)=>a[2]-b[2]);
-    for(const [h,k,d] of pairs){if(!of.has(h)&&room[k]>0){of.set(h,k);room[k]--}}
-  }
-  return {truckLeads,extra,hs,of};
+  const build=(truckLeads,extra)=>{
+    const hs=[...helpers,...extra];
+    const room=truckLeads.map(()=>P-1), of=new Map();
+    if(truckLeads.length&&P>1){
+      const pairs=[];
+      for(const h of hs)truckLeads.forEach((l,k)=>pairs.push([h,k,dPair(h,l)]));
+      pairs.sort((a,b)=>a[2]-b[2]);
+      for(const [h,k,d] of pairs){if(!of.has(h)&&room[k]>0){of.set(h,k);room[k]--}}
+    }
+    return {truckLeads,extra,hs,of};
+  };
+  if(ls.length<=T)return build(ls,[]);
+  const must=forced?ls.filter(forced).slice(0,T):[];
+  const rest=ls.filter(l=>!must.includes(l));
+  const k=T-must.length;
+  if(k<=0)return build(must,rest);
+  const total=r=>{let c=0;for(const l of r.truckLeads)c+=dJob(l)+(leadPen?leadPen(l):0);for(const h of r.hs)c+=r.of.has(h)?dPair(h,r.truckLeads[r.of.get(h)]):dJob(h);return c};
+  const pool=rest.slice(0,8);
+  let best=null,tried=0;
+  const pick=(start,chosen)=>{
+    if(tried>70)return;
+    if(chosen.length===k){tried++;
+      const tl=[...must,...chosen].sort((a,b)=>dJob(a)-dJob(b));
+      const r=build(tl,rest.filter(l=>!chosen.includes(l)));const c=total(r);
+      if(!best||c<best.c-1e-6)best={c,r};return}
+    for(let i=start;i<pool.length;i++)pick(i+1,[...chosen,pool[i]]);
+  };
+  pick(0,[]);
+  return best?best.r:build([...must,...rest.slice(0,k)],rest.slice(k));
 }
+/* The dispatcher's chosen driver counts only while that person is still locked to the job. */
+const isDriver=(wid,jid)=>!!(tonight.drivers&&tonight.drivers[wid]===jid&&tonight.locks[wid]===jid);
 function solve(){
   const _t0=performance.now();
   try{return solveInner()}finally{logEvent("solve",`Built crews in ${Math.round(performance.now()-_t0)} ms`,{jobs:tonight.jobs.length,workers:roster.workers.length})}
@@ -967,6 +991,9 @@ function solveInner(){
   const det=(h,l,j)=>{const i=(j*W+l)*W+h;if(rdC[i]<0){const a=travel(ws[l],ws[h]),b=travel(ws[h],jobs[j]),c=travel(ws[l],jobs[j]);rdC[i]=Math.max(0,(a.min+b.min-c.min)/2);rdM[i]=Math.max(0,(a.mi+b.mi-c.mi)/2)}return i};
   const rd=(h,l,j)=>rdC[det(h,l,j)], rdMi=(h,l,j)=>rdM[det(h,l,j)];
   const MAXP=50000;
+  const drvJ=new Int32Array(W).fill(-1);
+  for(let w=0;w<W;w++)if(locked[w]>=0&&isDriver(ws[w].id,jobs[locked[w]].id))drvJ[w]=locked[w];
+  const pcArgs=j=>[w=>cost[w][j],(h,l)=>rd(h,l,j),w=>drvJ[w]===j,l=>lim[l]&&costMi[l][j]>lim[l]&&locked[l]!==j?MAXP:0];
   function jobScore(crew,j){
     if(!crew.length)return 0;
     let sc=0;
@@ -974,7 +1001,7 @@ function solveInner(){
       for(let b=a+1;b<crew.length;b++){if(conflict[w][crew[b]])return -1e9;if(pref[w][crew[b]])sc+=PREF}}
     for(const w of crew)if(avoidJ[j].has(w)&&locked[w]!==j)return -1e9;
     const leadsIn=crew.filter(w=>lead[w]),nonLeads=crew.filter(w=>!lead[w]);
-    const {truckLeads,extra,hs,of}=pairCrew(leadsIn,nonLeads,T[j],P[j],w=>cost[w][j],(h,l)=>rd(h,l,j));
+    const {truckLeads,extra,hs,of}=pairCrew(leadsIn,nonLeads,T[j],P[j],...pcArgs(j));
     if(extra.length&&!s.leadsAsHelpers)sc-=VIOL*extra.length;
     if(hs.length>H[j])sc-=VIOL*(hs.length-H[j]);
     for(const l of truckLeads){sc+=LEADSLOT-cost[l][j];if(lim[l]&&costMi[l][j]>lim[l]&&locked[l]!==j)sc-=MAXP}
@@ -996,7 +1023,7 @@ function solveInner(){
     lp.sort((a,b)=>a[2]-b[2]);
     for(const [w,j] of lp){if(asg[w]>=0)continue;const L=crews[j].filter(o=>lead[o]).length;if(L<T[j]&&!conflictsWith(w,j)){asg[w]=j;crews[j].push(w)}}
     // 2) workers to the nearest lead's truck that has room
-    const roomFor=j=>{const leadsIn=crews[j].filter(o=>lead[o]);const r=pairCrew(leadsIn,crews[j].filter(o=>!lead[o]),T[j],P[j],w=>cost[w][j],(h,l)=>rd(h,l,j));return r.truckLeads.filter((l,k)=>[...r.of.values()].filter(x=>x===k).length<P[j]-1)};
+    const roomFor=j=>{const leadsIn=crews[j].filter(o=>lead[o]);const r=pairCrew(leadsIn,crews[j].filter(o=>!lead[o]),T[j],P[j],...pcArgs(j));return r.truckLeads.filter((l,k)=>[...r.of.values()].filter(x=>x===k).length<P[j]-1)};
     const fill=(cands)=>{
       for(;;){
         let best=null;
@@ -1105,7 +1132,9 @@ function trucksFor(j,crew){
   const people=crew.map(wById).filter(Boolean);
   const dJob=w=>hasLoc(w)?travel(w,j).min:1e9;
   const dPair=(h,l)=>hasLoc(h)&&hasLoc(l)?pairMin(h,l,j):1e9;
-  const {truckLeads,extra,hs,of}=pairCrew(people.filter(w=>w.lead),people.filter(w=>!w.lead),T,P,dJob,dPair);
+  const forced=w=>isDriver(w.id,j.id);
+  const leadPen=w=>{const L=leadLimit(w);return L&&hasLoc(w)&&travel(w,j).mi>L&&tonight.locks[w.id]!==j.id?1e6:0};
+  const {truckLeads,extra,hs,of}=pairCrew(people.filter(w=>w.lead),people.filter(w=>!w.lead),T,P,dJob,dPair,forced,leadPen);
   const trucks=[];for(let i=0;i<T;i++)trucks.push({lead:truckLeads[i]||null,crew:[]});
   const loose=[];
   for(const h of hs){if(of.has(h))trucks[of.get(h)].crew.push(h);else loose.push(h)}
@@ -1374,7 +1403,7 @@ function rResults(){
       if(role!=="lead"&&g&&(g.kind==="meet"||g.kind==="atlead")){const m=meetFor(w.id,t.lead.id,j.id);
         extra=`<div class="small" style="padding:0 0 6px 2px">${m?`📍 <a href="${gmap(m.lat,m.lng)}" target="_blank" rel="noopener">${esc(m.name)}</a> · <a href="#" data-act="spot" data-w="${w.id}" data-j="${j.id}">change</a>`:`<a href="#" data-act="spot" data-w="${w.id}" data-j="${j.id}">Pick a meet spot</a> <span class="muted">(optional)</span>`}</div>`}
       if(role!=="lead"&&g&&g.kind==="pickup"&&w.address)extra=`<div class="small muted" style="padding:0 0 6px 2px">Pickup: ${esc(w.address)}</div>`;
-      return `<div class="mem"><span class="n">${esc(w.name)}${role==="lead"?`<span class="tag lead">lead · truck</span>`:w.lead?`<span class="tag">lead, as worker</span>`:""}${(j.requested||[]).includes(w.id)?`<span class="tag lock">requested</span>`:""}${g?`<div class="small muted" style="margin-top:1px">${legText(g,pp)}</div>`:""}</span><button class="x" data-act="lock" data-w="${w.id}" data-j="${j.id}" title="${lk?"Unlock":"Keep on this job"}" style="font-size:15px;opacity:${lk?1:.45}">${lk?"🔒":"🔓"}</button><button class="x" data-act="unassign" data-w="${w.id}" data-j="${j.id}" title="Remove">×</button></div>${extra}`};
+      return `<div class="mem"><span class="n">${esc(w.name)}${role==="lead"?`<span class="tag lead">lead · truck</span>${isDriver(w.id,j.id)?`<span class="tag lock">driver picked by you</span>`:""}`:w.lead?`<span class="tag">lead, as worker</span>`:""}${(j.requested||[]).includes(w.id)?`<span class="tag lock">requested</span>`:""}${g?`<div class="small muted" style="margin-top:1px">${legText(g,pp)}</div>`:""}</span>${role!=="lead"&&w.lead?`<button class="x" data-act="mkDriver" data-w="${w.id}" data-j="${j.id}" title="${esc(first(w.name))} drives the truck" style="font-size:12px;width:auto;padding:0 6px;white-space:nowrap">🚚 Make driver</button>`:""}<button class="x" data-act="lock" data-w="${w.id}" data-j="${j.id}" title="${lk?"Unlock":"Keep on this job"}" style="font-size:15px;opacity:${lk?1:.45}">${lk?"🔒":"🔓"}</button><button class="x" data-act="unassign" data-w="${w.id}" data-j="${j.id}" title="Remove">×</button></div>${extra}`};
     trucksFor(j,crew).trucks.forEach((t,k)=>{
       const pl=planTruck(j,t);
       h+=`<div style="margin-top:${k?8:0}px">${T>1?`<div class="small" style="font-weight:600">Truck ${k+1}</div>`:""}`;
@@ -1540,6 +1569,7 @@ function rHelp(){
   <details class="hsec" id="relCard"><summary>What's new — release history</summary><p class="small muted" style="margin:0">Tap the version number at the top of any screen to see the latest changes.</p>${relHTML(CHANGELOG)}</details>
   <details class="hsec"><summary>🤖 AI assistant (optional)</summary><p class="small">With a Claude API key saved under <b>Settings → AI assistant</b>: <b>Read job notes with AI</b> pulls trucks, crew size, requested and “don't send” people and important notes out of messy calendar text. After building crews, <b>Review with AI</b> looks for problems and better swaps — type anything special for today (who has to leave early, who to keep off a job) and it takes that into account. Each suggestion has an <b>Apply</b> button; applied people are locked 🔒 so a rebuild keeps them. Only names, jobs, distances and rules are sent — never addresses or phone numbers.</p></details>
   <details class="hsec"><summary>How the matching works</summary><p class="small">Each crew lead drives the company truck from their home to the job, and the job's distance is measured from the lead's home. Workers join the truck along the way. If picking a worker up at home adds no more than ${esc(S().pickupMin)} minutes to the lead's drive (set in Settings), the lead picks them up. Otherwise the worker drives to a point on the lead's route and leaves their car there. So the tool pairs each worker with the lead whose route passes closest to their home, and fills lead spots first, then worker spots.</p>
+  <p class="small"><b>Two leads on one truck:</b> only one drives. The app picks the lead that makes the least driving for the whole crew (for example, the lead who lives near the workers, so they can ride along). To choose yourself, tap <b>🚚 Make driver</b> next to that lead on the crew card; it stays when you rebuild (tap 🔒 to undo).</p>
   <p class="small"><b>Lead range:</b> a crew lead is never sent to a job farther from their home than the max distance in Settings (or their own limit, set in their Workers profile). If no available lead is in range, the job shows a note so you can raise a limit or assign someone by hand.</p>
   <p class="small"><b>Meet spots:</b> tap “Pick a meet spot” under a worker to see nearby Park &amp; Ride lots and public parking. Those are meant for leaving a car all day. Store, gas station and restaurant lots (Walmart, Food Lion…) are left out by default because they often tow; tick “Include store &amp; gas station lots” to see them too, marked with a warning. Always check posted signs.</p>
   <p class="small"><b>Requested crew:</b> if a calendar event names people from your roster — full names anywhere, or first/last names after “Req:”, “Request:”, “Need:”, “Crew:” or “Lead:” (e.g. <code>Req: Marcus, Lena</code>) — they're put on that job automatically and tagged “requested”. You can also tap a job and pick requested people by hand. If a requested person is marked off, the job shows a red note.</p>
@@ -2349,7 +2379,13 @@ document.addEventListener("click",async e=>{
     case "delHistory":{const r=await ask(`Delete all ${HIST.size} saved day${HIST.size===1?"":"s"} of history? This can't be undone.`,"Delete history","Save history first");
       if(r===false){download(`crew-history-${dayKey(new Date())}.json`,historyJSON());break}if(!r)break;await histClear();logEvent("delete","history");render();toast("History deleted");break;}
     case "spot":pickSpot(el.dataset.w,el.dataset.j);break;
-    case "lock":{const w=el.dataset.w,j=el.dataset.j;if(tonight.locks[w]===j)delete tonight.locks[w];else tonight.locks[w]=j;save("tonight");render();break;}
+    case "lock":{const w=el.dataset.w,j=el.dataset.j;if(tonight.locks[w]===j){delete tonight.locks[w];if(tonight.drivers)delete tonight.drivers[w]}else tonight.locks[w]=j;save("tonight");render();break;}
+    case "mkDriver":{const w=el.dataset.w,j=el.dataset.j,job=jById(j);if(!job)break;
+      tonight.drivers=tonight.drivers||{};
+      const others=Object.keys(tonight.drivers).filter(x=>x!==w&&isDriver(x,j));
+      others.slice(0,Math.max(0,others.length-(jTrucks(job)-1))).forEach(x=>delete tonight.drivers[x]);
+      tonight.drivers[w]=j;tonight.locks[w]=j;logEvent("driver",`${wById(w)?.name} drives on ${job.name}`);
+      save("tonight");render();toast(`${first(wById(w)?.name)} drives this truck — tap 🔒 to undo`);break;}
     case "unassign":{const w=el.dataset.w,j=el.dataset.j;tonight.assign[j]=tonight.assign[j].filter(x=>x!==w);delete tonight.locks[w];save("tonight");render();break;}
     case "addWorker":editingWorker="new";formGeo=null;render();setTimeout(()=>$("#wfName")?.focus(),0);break;
     case "editWorker":editingWorker=id;formGeo=null;render();setTimeout(()=>$("#wfName")?.scrollIntoView({block:"center"}),0);break;
