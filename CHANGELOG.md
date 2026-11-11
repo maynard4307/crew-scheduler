@@ -2,6 +2,11 @@
 
 Tap the version number at the top of the app to see this inside Crew Scheduler.
 
+## 2026.11.11-c — Nov 11, 2026
+
+**New**
+- New option in Settings → Scheduling rules: when a job has a spare crew lead, they can bring their own truck as an extra truck when they'd drive to the job alone anyway, or when it saves the crew at least 10 minutes of driving. The crew size stays the same, and workers ride with whichever truck passes closest to them. It's shown as “Truck 2 (extra)” on the crews and the schedule. Off until you turn it on.
+
 ## 2026.11.11-b — Nov 11, 2026
 
 **New**
