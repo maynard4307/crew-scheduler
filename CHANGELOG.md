@@ -13,6 +13,7 @@ Tap the version number at the top of the app to see this inside Crew Scheduler.
 - Can't work together and Work well together moved to the Workers tab, and each worker's profile shows their pairs.
 - Backup & restore has one home: Settings → Backup & restore.
 - How-to topics, What's new and the support pack are in Settings → Help.
+- Phoenix Spirit Group logo at the top, and as the icon when you add the app to your home screen.
 
 **Fixed**
 - How-to said pickups happen within 2 miles of the lead's route. It now says the real rule: when picking up adds no more than 10 minutes (adjustable).

@@ -26,6 +26,7 @@ Tabs: **Today · Workers · History · ⚙ Settings** (since 2026.11.11-a; befor
 - **Today**: the daily 1-2-3 flow only. Rare actions (Paste titles, Start new day, Download CSV, Save to History, Clear crews) are under **More** menus. Fixed bottom action bar shows the one next step.
 - **Workers**: people, plus Can't work together / Work well together (shown in each worker's profile too).
 - **History**: unchanged.
+- **Header**: Phoenix Spirit Group (PSG) square logo left of the title, embedded as a data-URI PNG (`.brand`, on a white tile so it reads in dark mode); the same logo is the favicon / apple-touch-icon. Chosen over the wide "Phoenix Spirit Group / A Helix Company" logo because it stays legible at 34–40 px.
 - **⚙ Settings**: Scheduling rules (numbers, checkboxes) → Connections (Road drive times key, AI key) → Backup & restore (+ download app) → Help & updates (how-to topics, What's new, support pack) → Delete data. Jump chips at the top.
 - Per-job and per-lead settings stay on the job / worker form.
 
