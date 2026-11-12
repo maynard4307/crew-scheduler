@@ -2,6 +2,18 @@
 
 Tap the version number at the top of the app to see this inside Crew Scheduler.
 
+## 2026.11.12-a — Nov 12, 2026
+
+**New**
+- New “Scheduling for” choice at the top of step 1 on Today: tap Today or Tomorrow, or pick any date. Jobs you add by hand go on that day, and the copied schedule and History use that date. Step 1 and 2 titles say which day you're working on.
+- When you open a job file, the day list starts on the day you picked, and loading a day's jobs sets “Scheduling for” to match. If loaded calendar jobs are for a different day than the one picked, a note says so.
+
+## 2026.11.11-d — Nov 11, 2026
+
+**New**
+- New option: type a job in plain English. Turn it on in Settings → Type jobs in plain English, then tap + Add a job and type something like “Smith mowing, 412 Oak St Raeford, 7am, 2 trucks of 3, req Marcus, no Kevin”. Tap Fill in the form and it fills in the name, time, address, trucks, crew size and who's requested, for you to check before you Save. It only fills the form: who goes where and who drives is still up to your scheduling rules.
+- It uses free AI first: the AI built into newer Chrome on a PC (stays on your computer), or Google Gemini with a free key you paste in Settings. With no AI or no internet, a basic reader still picks out the time, trucks, crew size and names. Only the sentence you type is sent, never your worker list or addresses. Off until you turn it on.
+
 ## 2026.11.11-c — Nov 11, 2026
 
 **New**
