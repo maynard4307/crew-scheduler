@@ -71,6 +71,8 @@ label.f{display:block;font-size:13px;color:var(--muted);margin:8px 0 3px}
 .item .s{font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .chip{border:1px solid var(--line);background:var(--chip);border-radius:999px;padding:6px 11px;font:inherit;font-size:14px;cursor:pointer;color:var(--ink)}
+.dayPick .chip.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.dayPick{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 10px;padding-bottom:10px;border-bottom:1px solid var(--line)}
 .chip.off{background:transparent;color:var(--muted);text-decoration:line-through}
 .tag{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px;background:var(--chip);color:var(--muted);margin-left:4px;vertical-align:1px}
 .tag.lead{background:var(--ok-bg);color:var(--ok)}
@@ -139,9 +141,10 @@ details.hsec>summary{font-weight:600;cursor:pointer;padding:4px 0}
 <script>
 "use strict";
 /* ---------- state ---------- */
-const APP_VERSION="2026.11.11-d";
+const APP_VERSION="2026.11.12-a";
 /* Release notes — newest first. Add an entry here with every update. */
 const CHANGELOG=[
+ {v:"2026.11.12-a",date:"Nov 12, 2026",added:["New “Scheduling for” choice at the top of step 1 on Today: tap Today or Tomorrow, or pick any date. Jobs you add by hand go on that day, and the copied schedule and History use that date. Step 1 and 2 titles say which day you're working on.","When you open a job file, the day list starts on the day you picked, and loading a day's jobs sets “Scheduling for” to match. If loaded calendar jobs are for a different day than the one picked, a note says so."]},
  {v:"2026.11.11-d",date:"Nov 11, 2026",added:["New option: type a job in plain English. Turn it on in Settings → Type jobs in plain English, then tap + Add a job and type something like “Smith mowing, 412 Oak St Raeford, 7am, 2 trucks of 3, req Marcus, no Kevin”. Tap Fill in the form and it fills in the name, time, address, trucks, crew size and who's requested, for you to check before you Save. It only fills the form: who goes where and who drives is still up to your scheduling rules.","It uses free AI first: the AI built into newer Chrome on a PC (stays on your computer), or Google Gemini with a free key you paste in Settings. With no AI or no internet, a basic reader still picks out the time, trucks, crew size and names. Only the sentence you type is sent, never your worker list or addresses. Off until you turn it on."]},
  {v:"2026.11.11-c",date:"Nov 11, 2026",added:["New option in Settings → Scheduling rules: when a job has a spare crew lead, they can bring their own truck as an extra truck when they'd drive to the job alone anyway, or when it saves the crew at least 10 minutes of driving. The crew size stays the same, and workers ride with whichever truck passes closest to them. It's shown as “Truck 2 (extra)” on the crews and the schedule. Off until you turn it on."]},
  {v:"2026.11.11-b",date:"Nov 11, 2026",added:["New “🚚 Make driver” button: when a job has more than one crew lead, tap it next to the lead you want driving the truck. It stays that way when you rebuild, like a 🔒 lock (tap the lock to undo)."],fixed:["When a job had two crew leads, the one living closest to the job always got the truck, even when the other lead lived next to the workers. Now the app picks the driver that makes the least driving for the whole crew, so people near the other lead can ride along instead of driving themselves."]},
@@ -546,6 +549,7 @@ async function addJobs(places,source){
     if(r)setJobs(places,source);
     else{tonight.jobs.push(...places.map(toJob));tonight.assign=null;save("tonight")}
   } else setJobs(places,source);
+  const pd=(places.find(p=>isDayKey(p.day))||{}).day;if(pd){tonight.day=pd;save("tonight")}
   const nReq=tonight.jobs.filter(j=>(j.requested||[]).length).length;
   render();toast(`${places.length} job(s) loaded${heads?` · ${heads} heading(s) skipped`:""}${nReq?` · ${nReq} with requested crew`:""}`);
   geocodeMissing("jobs");
@@ -565,7 +569,7 @@ function pickDay(evs){
       const counts={};pool.forEach(e=>{if(e.day)counts[e.day]=(counts[e.day]||0)+1});
       let days=Object.keys(counts).filter(d=>d>=fromK&&d<=toK).sort();
       if(!days.length)days=Object.keys(counts).sort().reverse().slice(0,20);
-      const def=days.includes(today)?today:(days.find(d=>d>=today)||days[days.length-1]);
+      const sd=isDayKey(tonight.day)?tonight.day:"";const def=days.includes(sd)?sd:days.includes(today)?today:(days.find(d=>d>=today)||days[days.length-1]);
       const lab=d=>{const [y,m,dd]=d.split("-").map(Number);const dt=new Date(y,m-1,dd);return dt.toLocaleDateString([], {weekday:"short",month:"short",day:"numeric"})+(d===today?" (today)":d===tomorrow?" (tomorrow)":"")};
       bg.querySelector("#pkDay").innerHTML=days.map(d=>`<option value="${d}" ${d===def?"selected":""}>${esc(lab(d))} — ${counts[d]} job${counts[d]>1?"s":""}</option>`).join("")||`<option value="">No dated events found</option>`;
     };
@@ -1275,7 +1279,8 @@ function rTonight(){
   if(odT.length){const o=odT[odT.length-1];h+=`<div class="card" style="border-color:var(--warn);background:var(--warn-bg)"><div class="row" style="justify-content:space-between"><span><b>Close out ${esc(dLabel(o.date,{weekday:"long",month:"short",day:"numeric"}))}</b> — ${o.n} job${o.n>1?"s":""} still need a status${odT.length>1?` (+${odT.length-1} earlier day${odT.length>2?"s":""})`:""}.</span><button class="b small p" data-act="histOpen" data-d="${o.date}">Close out</button></div></div>`}
   if(empty)h+=`<div class="card"><h2>Welcome</h2><p class="muted small">Start by adding your workers (with home locations) on the <b>Workers</b> tab, then load today's jobs here. Want to see how it works first?</p><button class="b" data-act="sample">Try it with sample data</button></div>`;
   // step 1
-  const pre1=h;h=`
+  if(!tonight.jobs.length&&isDayKey(tonight.day)&&tonight.day<dayKey(new Date()))delete tonight.day;
+  const pre1=h;h=rDayPicker()+`
   <p class="muted small">After 9 p.m., export the job calendar (see <a href="#" data-act="gohelp">how to export</a>) and open the file here. It picks out each job's time, client and town and finds it on the map. You can also paste event titles, one per line.</p>
   <div class="row"><button class="b ${jobs.length?"":"p"}" data-act="pickJobs">Open job file</button><button class="b" data-act="addJob">+ Add a job</button>${moreMenu([`<button class="b" data-act="togglePaste">Paste event titles instead</button>`,jobs.length?`<button class="b" data-act="newNight">Start new day (clear jobs)</button>`:""])}</div>
   <div id="pasteBox" class="hide"><label class="f">Paste event titles, one per line (e.g. “7a-Lee Electric/Cameron Epps-Raeford, NC”), or CSV rows (Name, Address, Crew)</label><textarea id="pasteTxt"></textarea><div class="row" style="margin-top:6px"><button class="b p" data-act="pasteJobs">Load pasted jobs</button></div></div>
@@ -1294,7 +1299,7 @@ function rTonight(){
   const oddN=jobs.filter(j=>locWarn(j,"job")).length;
   const onJobs=jobs.filter(j=>j.on);
   const sum1=jobs.length?`${onJobs.length} job${onJobs.length===1?"":"s"} · ${onJobs.reduce((n,j)=>n+jTrucks(j),0)} truck${onJobs.reduce((n,j)=>n+jTrucks(j),0)===1?"":"s"} · ${onJobs.reduce((n,j)=>n+jTrucks(j)*jPer(j),0)} people${noLoc.length+oddN?` · <span style="color:var(--warn)">⚠ ${noLoc.length+oddN} to fix</span>`:""}`:"";
-  h+=stepWrap(1,"Load today's jobs",sum1,b1,!jobs.length||!tonight.assign||noLoc.length>0||oddN>0||!!editingJob);
+  h+=stepWrap(1,(dayWord()==="today"||dayWord()==="tomorrow"?`Load ${dayWord()}'s jobs`:`Load jobs for ${esc(dayWord())}`),sum1&&`<b>${esc(dLabel(scheduleDay(),{weekday:"long",month:"short",day:"numeric"}))}</b> · `+sum1,b1,!jobs.length||!tonight.assign||noLoc.length>0||oddN>0||!!editingJob);
   // step 2
   const act=roster.workers.filter(w=>w.active!==false);const off=new Set(tonight.off);
   const pre2=h;h="";
@@ -1313,7 +1318,7 @@ function rTonight(){
   const nOn=act.filter(w=>!off.has(w.id)).length,nLeads=act.filter(w=>w.lead&&!off.has(w.id)).length;
   const lacks=act.some(w=>!hasLoc(w)&&!off.has(w.id))||nLeads<onJobs.reduce((n,j)=>n+jTrucks(j),0);
   const sum2=act.length?`${nOn} of ${act.length} working · ${nLeads} lead${nLeads===1?"":"s"}${off.size?` · off: ${esc(act.filter(w=>off.has(w.id)).map(w=>w.name).join(", ").slice(0,80))}`:""}`:"";
-  h+=stepWrap(2,"Who's working today?",sum2,b2,!act.length||!tonight.assign||lacks);
+  h+=stepWrap(2,`Who's working ${dayWord()==="today"||dayWord()==="tomorrow"?dayWord():"that day"}?`,sum2,b2,!act.length||!tonight.assign||lacks);
   // step 3
   const ready=jobs.some(j=>j.on&&hasLoc(j))&&act.some(w=>!off.has(w.id)&&hasLoc(w));
   h+=`<div class="card" id="step3"><h2><span class="step">3</span>Build crews &amp; send</h2>
@@ -1582,7 +1587,7 @@ function rHelp(){
   return `<details class="hsec" id="hEach"><summary>Each day: from calendar to schedule</summary><ol class="help">
   <li>After the jobs are posted at 9 p.m., go to <b>calendar.google.com</b> on a computer.</li>
   <li>Click the <b>⚙ gear</b> → <b>Settings</b>. On the left under “Settings for my calendars” (or “other calendars”), click the job calendar, then <b>Export calendar</b>. A .zip file downloads.</li>
-  <li>On the <b>Today</b> tab, tap <b>Open job file</b> and pick that .zip (or the .ics inside it). Choose the day — it defaults to today.</li>
+  <li>On the <b>Today</b> tab, tap <b>Open job file</b> and pick that .zip (or the .ics inside it). Choose the day — it starts on the day picked under “Scheduling for” (today unless you change it).</li>
   <li>The tool reads each event title — <code>7a-Lee Electric/Cameron Epps-Raeford, NC</code> becomes report time 7:00a, job “Lee Electric / Cameron Epps”, location Raeford, NC — and finds each town on the map. Headings like <code>***Fayetteville Schedule***</code> are skipped. If the title or event notes say how many trucks (e.g. <code>2 trucks</code>) or people (<code>3 man crew</code>), that's filled in too.</li>
   <li>Check <b>Trucks</b> and <b>Per truck</b> on each job, tap anyone who's off, then <b>Build crews</b>.</li>
   <li>Fix any yellow or red notes with the “Add / move” menus, then <b>Copy schedule</b> and send it out before 4 a.m.</li></ol>
@@ -1607,7 +1612,7 @@ function rHelp(){
 
 /* ---------- export ---------- */
 function scheduleText(){
-  const jd=(tonight.jobs.find(j=>j.day)||{}).day;
+  const jd=scheduleDay();
   const d=jd?new Date(...jd.split("-").map((n,i)=>i===1?n-1:+n)):new Date();
   let t=`Crews — ${d.toLocaleDateString([], {weekday:"short",month:"short",day:"numeric"})}\n`;
   tonight.jobs.forEach(j=>{const c=tonight.assign?.[j.id];if(!c)return;const T=jTrucks(j);
@@ -1984,7 +1989,7 @@ async function jobTextFill(btn){
   const got=[f.name&&"name",f.time&&"time",f.address&&"address",jtNum(f.trucks)&&"trucks",jtNum(f.perTruck)&&"crew size",req.length&&"requested people"].filter(Boolean);
   const msg=[`Filled in by ${res.by}${got.length?": "+got.join(", "):" — it couldn't pick anything out"}. Check it, then Save.`,
     av.length?`Don't send: ${av.map(w=>w.name).join(", ")}.`:"",note?`Note: ${note}`:"",
-    f.day?`You said “${f.day}” — this adds the job to the day you're scheduling now.`:"",
+    f.day?`You said “${f.day}” — this job goes on the day you're scheduling (${dLabel(scheduleDay(),{weekday:"short",month:"short",day:"numeric"})}). To change it, use “Scheduling for” at the top of step 1.`:"",
     miss.length?`Not on your worker list: ${miss.slice(0,4).join(", ")}.`:"",
     res.fellBack?`AI wasn't used (${String(res.fellBack).replace(/\.$/,"")}).`:""].filter(Boolean);
   const box=$("#jfTextMsg");if(box){box.innerHTML=msg.map(esc).join("<br>");box.classList.remove("hide")}
@@ -2073,7 +2078,29 @@ function snapshotJobs(){
   return out;
 }
 const crewSig=jobs=>jobs.map(j=>j.key+":"+j.crews.map(t=>(t.lead?t.lead.name:"-")+"+"+t.workers.map(w=>w.name).sort().join(",")).join("/")).sort().join(";");
-function scheduleDay(){return (tonight.jobs.find(j=>j.day)||{}).day||dayKey(new Date())}
+const isDayKey=d=>typeof d==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(d);
+function scheduleDay(){return isDayKey(tonight.day)?tonight.day:((tonight.jobs.find(j=>j.day)||{}).day||dayKey(new Date()))}
+function tomorrowKey(){const t=new Date();t.setDate(t.getDate()+1);return dayKey(t)}
+/* "today" / "tomorrow" / "Sat, Nov 14" for the day being scheduled */
+function dayWord(d){d=d||scheduleDay();return d===dayKey(new Date())?"today":d===tomorrowKey()?"tomorrow":dLabel(d,{weekday:"short",month:"short",day:"numeric"})}
+function setScheduleDay(d){
+  if(!isDayKey(d))return;
+  tonight.day=d;
+  if(tonight.histSaved&&tonight.histSaved.date!==d)delete tonight.histSaved;
+  save("tonight");render();
+  logEvent("day",`scheduling for ${d}`);
+  toast(`Scheduling for ${dLabel(d,{weekday:"long",month:"short",day:"numeric"})}`);
+}
+function rDayPicker(){
+  const today=dayKey(new Date()),tmr=tomorrowKey(),d=scheduleDay();
+  const sh=k=>dLabel(k,{weekday:"short",month:"short",day:"numeric"});
+  const other=d!==today&&d!==tmr;
+  const mism=tonight.jobs.filter(j=>isDayKey(j.day)&&j.day!==d);
+  return `<div class="dayPick"><span class="small"><b>Scheduling for</b></span>
+    <button type="button" class="chip ${d===today?"on":""}" data-act="schedDay" data-d="${today}" title="${esc(sh(today))}">Today</button><button type="button" class="chip ${d===tmr?"on":""}" data-act="schedDay" data-d="${tmr}" title="${esc(sh(tmr))}">Tomorrow</button><label class="chip ${other?"on":""}" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px">${other?"":"Other"}<input type="date" id="schedDate" value="${other?d:""}" style="width:auto;padding:2px 4px;font-size:13px;border:0;background:transparent;color:inherit"></label>
+    <span class="small muted" style="flex-basis:100%">${esc(dLabel(d,{weekday:"long",month:"long",day:"numeric"}))}</span></div>
+    ${mism.length?`<div class="warn small">${mism.length} job${mism.length>1?"s":""} came from the calendar for ${esc([...new Set(mism.map(j=>sh(j.day)))].join(", "))}, but you're scheduling for ${esc(sh(d))}. Pick the right day above, or tap Open job file to load that day's jobs.</div>`:""}`;
+}
 function histPeople(jb){return [...jb.crews.flatMap(t=>[t.lead&&t.lead.name,...t.workers.map(w=>w.name)]).filter(Boolean)]}
 async function saveDayToHistory(quiet){
   if(!tonight.assign){if(!quiet)toast("Build crews first");return}
@@ -2450,7 +2477,7 @@ async function loadPackJobs(text,rosterText,source){
       lat:ok?lat:null,lng:ok?lng:null,geoNote:str(j.geoNote,200),geoLabel:str(j.geoLabel,300),desc:str(j.desc,1500),folder:str(j.folder,200),
       crew:Math.max(1,Math.min(20,j.crew|0||S().defaultCrew)),trucks:Math.max(1,Math.min(20,j.trucks|0||1)),requested:req,avoid:av,aiNote:str(j.aiNote,500),on:j.on!==false};
   });
-  tonight.off=ids(d.off);tonight.assign=null;tonight.locks={};tonight.meets={};delete tonight.aiReview;
+  tonight.day=isDayKey(d.day)?d.day:undefined;tonight.off=ids(d.off);tonight.assign=null;tonight.locks={};tonight.meets={};delete tonight.aiReview;
   tonight.importedAt=new Date().toISOString();tonight.source=source;
   logEvent("import",`pack jobs from ${source}: ${tonight.jobs.length} jobs`);
   save("tonight");tab="tonight";render();
@@ -2486,6 +2513,7 @@ document.addEventListener("click",async e=>{
     case "stepToggle":todayOpen[el.dataset.n]=el.dataset.o==="1";render();setTimeout(()=>$("#step"+el.dataset.n)?.scrollIntoView({block:"start"}),0);break;
     case "jump":goSettings(el.dataset.to);break;
     case "sample":loadSample();break;
+    case "schedDay":setScheduleDay(el.dataset.d);break;
     case "gohelp":goSettings("helpCard","hEach");break;
     case "goworkers":tab="workers";render();break;
     case "pickJobs":$("#fileJobs").value="";$("#fileJobs").click();break;
@@ -2662,6 +2690,7 @@ document.addEventListener("input",e=>{
 });
 document.addEventListener("change",e=>{
   const el=e.target;
+  if(el.id==="schedDate"){if(isDayKey(el.value))setScheduleDay(el.value);return}
   if(el.classList.contains("histNote")){const d=el.dataset.d,i=+el.dataset.i;const v=el.value.trim();const j=HIST.get(d).jobs[i];if((j.note||"")!==v)histEdit(d,c=>{c.jobs[i].note=v},`${j.name}: note “${v}”`);return}
   if(el.id==="histLoad"){const f=el.files[0];if(!f)return;f.text().then(t=>{const d=JSON.parse(t);const days=d.days||(d.history&&d.history.days)||[];const n=mergeHistory(days);render();toast(n?`Loaded ${n} day(s) of history`:"Nothing new in that file")}).catch(()=>toast("That isn't a Crew Scheduler history file"));return}
   if(el.dataset.act==="jobCrew"){const j=jById(el.dataset.id);j.crew=Math.max(1,+el.value||1);save("tonight");if(tonight.assign)render();return}

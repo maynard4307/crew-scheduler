@@ -2,6 +2,12 @@
 
 Tap the version number at the top of the app to see this inside Crew Scheduler.
 
+## 2026.11.12-a — Nov 12, 2026
+
+**New**
+- New “Scheduling for” choice at the top of step 1 on Today: tap Today or Tomorrow, or pick any date. Jobs you add by hand go on that day, and the copied schedule and History use that date. Step 1 and 2 titles say which day you're working on.
+- When you open a job file, the day list starts on the day you picked, and loading a day's jobs sets “Scheduling for” to match. If loaded calendar jobs are for a different day than the one picked, a note says so.
+
 ## 2026.11.11-d — Nov 11, 2026
 
 **New**

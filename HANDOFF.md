@@ -4,7 +4,7 @@
 
 - Live app: https://maynard4307.github.io/crew-scheduler/
 - Repository: https://github.com/maynard4307/crew-scheduler (public; GitHub Pages from `main`, root)
-- Current version: **2026.11.11-d** (shown in the app's top bar; tap it for What's new)
+- Current version: **2026.11.12-a** (shown in the app's top bar; tap it for What's new)
 - Owner: maynard4307 · Primary user: the owner's brother (dispatcher, iPhone + PC)
 
 ## 1. What it's for
@@ -15,7 +15,7 @@ A field-service contractor in North Carolina gets the next day's jobs as Google 
 
 Tabs: **Today · Workers · History · ⚙ Settings** (since 2026.11.11-a; before that Crew rules and How to were separate tabs).
 
-1. Export the job calendar (calendar.google.com → Settings → the calendar → Export) and open the .zip/.ics in **Today → step 1**, or paste event titles (More menu). Pick the day (defaults to today).
+1. Export the job calendar (calendar.google.com → Settings → the calendar → Export) and open the .zip/.ics in **Today → step 1**, or paste event titles (More menu). First pick **Scheduling for** (Today / Tomorrow / a date) at the top of step 1; the calendar day list starts on that day, and loading a day sets it to match.
 2. Check **Trucks** and **Per truck** on each job; in step 2 mark who's off.
 3. **Build crews** (step 3, or the bottom bar) → review notes, adjust with Add/move and 🔒 locks; optional **Review with AI**. Steps 1–2 fold into one-line summaries once crews exist (auto-open again when they have problems).
 4. **Copy schedule** (bottom bar or end of the crews; also saves the day to **History**) and send it.
@@ -59,7 +59,7 @@ Tabs: **Today · Workers · History · ⚙ Settings** (since 2026.11.11-a; befor
 | Key / store | What | In backups? |
 |---|---|---|
 | localStorage `crew_roster` | workers, conflicts, prefers, settings | Yes |
-| localStorage `crew_tonight` | today's jobs, assignments, locks, off list, meets, `drivers` (Make driver: worker id → job id, counts only while locked to that job — `isDriver`), AI review, `histSaved` | No (support pack only) |
+| localStorage `crew_tonight` | `day` (the day being scheduled, YYYY-MM-DD; set by Scheduling for or by loading a calendar day), today's jobs, assignments, locks, off list, meets, `drivers` (Make driver: worker id → job id, counts only while locked to that job — `isDriver`), AI review, `histSaved` | No (support pack only) |
 | IndexedDB `crew-scheduler` → `days` | History, one record per date (names copied in) | Yes (merged on restore, newer edit wins) |
 | IndexedDB `kv.histFile` | PC history-file handle (File System Access) | No |
 | localStorage `crew_geo` | address lookup cache (`v2|<query>` → up to 15 results from all services) | No |
@@ -90,6 +90,7 @@ On the Claude artifact the roster/today also sync through the artifact database 
 - Matching: `solve` → `solveInner` (greedy: leads → workers → spare leads, then local search with moves/swaps/chains, ~6–24 random restarts), `pairCrew` (also picks which leads drive when there are extra leads: tries each choice, up to 8 leads, lowest total minutes; honors `forced` = Make driver, `leadPen` = past mile limit), `jobScore`
 - Per-truck view: `trucksFor` (also the optional extra truck: compares crew minutes with T vs T+1 trucks via `legFor`; `truckLabel`), `legFor` (lead / pickup / meet / atlead / atjob / job), `planTruck` (leave-by timeline), `jobIssues`
 - Layout: `render` (tabs `tonight`/`workers`/`history`/`settings`), `rTonight` with `stepWrap` (collapsible steps, `todayOpen` overrides, reset on build/new day), `moreMenu`, `rActionBar` (bottom bar), `goSettings(cardId, openId)` for links into Settings; Settings = `rSettings` → `rRouteSettings`, `rAISettings`, `rBackupCard`, `rHelpCard` (wraps `rHelp` sections as `<details>`), `rDeleteCard`; pair lists `rPairs` on Workers
+- Day being scheduled: `scheduleDay()` = `tonight.day` → first job's calendar day → today. `rDayPicker`, `setScheduleDay`, `dayWord`. Used by the copied schedule, History save, step titles. Hand-added jobs have no `day` of their own; they follow `tonight.day`. Cleared by Start new day; a past `day` with no jobs resets to today.
 - Output: `rResults`, `scheduleText`, `scheduleCSV`, `rMap`
 - History: `saveDayToHistory`, `histEdit`, `rHistory`, `rHistDay`, `rHistSearch`, `historyCSV`, `fileConnect`/`fileSync`, `mergeHistory`
 - AI: `askClaude`, `aiReadNotes`, `aiReview`, `applySuggestion`
@@ -152,3 +153,4 @@ Never commit backups, support packs, CSVs or keys (`.gitignore` blocks `*.json`,
 | Nov 11, 2026 | Extra leads on a job: driver = least total crew driving (was: closest to the job), plus a Make driver override. Found from a Siler City job where the Asheboro-area lead drove and two Fayetteville people (one a lead) each drove ~65 mi alone |
 | Nov 11, 2026 | Optional extra truck for a spare lead (off by default): only when they'd drive alone anyway or it saves ≥ 10 min; max one per job; crew size unchanged |
 | Nov 11, 2026 | Plain-English job entry (off by default): AI only fills the Add a job form for review, never changes crews or drivers. Free first: Chrome built-in AI, then a free Gemini key, then the existing Claude key; basic offline reader always as the fallback. Only the typed sentence is sent; the roster is matched on the device |
+| Nov 12, 2026 | "Scheduling for" day choice (Today / Tomorrow / date) on Today, so hand-typed jobs can be scheduled for the next day; schedule and History use it |
