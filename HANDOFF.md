@@ -4,7 +4,7 @@
 
 - Live app: https://maynard4307.github.io/crew-scheduler/
 - Repository: https://github.com/maynard4307/crew-scheduler (public; GitHub Pages from `main`, root)
-- Current version: **2026.11.12-a** (shown in the app's top bar; tap it for What's new)
+- Current version: **2026.11.14-a** (shown in the app's top bar; tap it for What's new)
 - Owner: maynard4307 · Primary user: the owner's brother (dispatcher, iPhone + PC)
 
 ## 1. What it's for
@@ -15,7 +15,7 @@ A field-service contractor in North Carolina gets the next day's jobs as Google 
 
 Tabs: **Today · Workers · History · ⚙ Settings** (since 2026.11.11-a; before that Crew rules and How to were separate tabs).
 
-1. Export the job calendar (calendar.google.com → Settings → the calendar → Export) and open the .zip/.ics in **Today → step 1**, or paste event titles (More menu). First pick **Scheduling for** (Today / Tomorrow / a date) at the top of step 1; the calendar day list starts on that day, and loading a day sets it to match.
+1. Export the job calendar (calendar.google.com → Settings → the calendar → Export) and open the .zip/.ics in **Today → step 1**, or paste event titles (More menu). First pick **Scheduling for** (Today / Tomorrow / a date) at the top of step 1 (it starts on Today, or on Tomorrow from 3 p.m. on); the calendar day list starts on that day, and loading a day sets it to match. A calendar event that spans several days, or repeats, is loaded on every day it covers.
 2. Check **Trucks** and **Per truck** on each job; in step 2 mark who's off.
 3. **Build crews** (step 3, or the bottom bar) → review notes, adjust with Add/move and 🔒 locks; optional **Review with AI**. Steps 1–2 fold into one-line summaries once crews exist (auto-open again when they have problems).
 4. **Copy schedule** (bottom bar or end of the crews; also saves the day to **History**) and send it.
@@ -45,6 +45,7 @@ Tabs: **Today · Workers · History · ⚙ Settings** (since 2026.11.11-a; befor
 - Spare leads may fill worker spots (setting, default on); their truck stays parked.
 - Leave-by times: work backward from the job's report time — arrive `arriveEarly` min early (default 15), allow `stopMinutes` per pickup/meet stop (default 5). Leave times round down to 5 minutes.
 - Meet spots: suggest **Park & Ride** first, then public free lots; store/gas lots (Walmart, Food Lion…) only if the user turns that option on, always with a towing warning.
+- **Nothing is left off quietly.** A ticked job that has no crew (no map location, or added after crews were built) is listed in red on the crews and at the end of the copied schedule as “NOT SCHEDULED YET”. A save that fails shows “NOT SAVED”; the app never shows “Saved” for something that wasn't.
 - **AI never decides crews or drivers.** Plain-English job entry only fills the job form; the dispatcher checks it and taps Save. Review with AI only suggests moves the dispatcher applies by hand.
 - Close-out happens **the next morning**. Statuses: Completed, Rained out, Cancelled (no "Partial"). **History is kept forever.**
 - Calendar titles look like `7a-Lee Electric/Cameron Epps-Raeford, NC, Hoke County` → time · client / contact · town. Headings like `***Fayetteville Schedule***` are skipped.
@@ -59,12 +60,14 @@ Tabs: **Today · Workers · History · ⚙ Settings** (since 2026.11.11-a; befor
 | Key / store | What | In backups? |
 |---|---|---|
 | localStorage `crew_roster` | workers, conflicts, prefers, settings | Yes |
-| localStorage `crew_tonight` | `day` (the day being scheduled, YYYY-MM-DD; set by Scheduling for or by loading a calendar day), today's jobs, assignments, locks, off list, meets, `drivers` (Make driver: worker id → job id, counts only while locked to that job — `isDriver`), AI review, `histSaved` | No (support pack only) |
+| localStorage `crew_tonight` | `day` (the day being scheduled, YYYY-MM-DD; set by Scheduling for, by loading a calendar day, or pinned by `pinDay` when a job is typed in or crews are built), `offAt` (when the off list was last touched), today's jobs, assignments, locks, off list, meets, `drivers` (Make driver: worker id → job id, counts only while locked to that job — `isDriver`), AI review, `histSaved` | No (support pack only) |
 | IndexedDB `crew-scheduler` → `days` | History, one record per date (names copied in) | Yes (merged on restore, newer edit wins) |
 | IndexedDB `kv.histFile` | PC history-file handle (File System Access) | No |
 | localStorage `crew_geo` | address lookup cache (`v2|<query>` → up to 15 results from all services) | No |
 | localStorage `crew_places` | saved spots: street address fixed by hand → coordinates, reused for every later job/worker with that address | Yes (`places`, newer wins on restore) |
 | localStorage `crew_rc`, `crew_rg` | road drive time cache (`"lat,lng>lat,lng"` → [min, mi]); route geometries | No |
+| localStorage `crew_history` | History, only when IndexedDB isn't available (fallback) | Yes |
+| localStorage `crew_backup` | when the last backup was saved from this device (`at`), reminder snooze | No |
 | localStorage `crew_ai`, `crew_route` | Claude API key/model; OpenRouteService key | **Never** (device only) |
 | localStorage `crew_jobtext` | plain-English job entry: `on`, `engine` (auto/builtin/gemini/claude/basic), `geminiKey`, `geminiModel` | **Never** (device only; support pack only says on/engine/whether a Gemini key is set) |
 | localStorage `crew_log`, `crew_lastimport`, `crew_seenver` | support log (300 entries), last import raw text, last seen version | Support pack only |
@@ -78,20 +81,22 @@ On the Claude artifact the roster/today also sync through the artifact database 
 | OpenStreetMap Nominatim, OpenRouteService geocode (if key), US Census geocoder, Photon | address → map location | none (ORS uses the routing key) | Nominatim throttled 1/sec; all cached; stops asking once a street-level match fits the typed town/ZIP. Census CORS from browsers is unverified: if blocked it is skipped for the session (`censusReachable` in environment.json) |
 | Overpass API | Park & Ride / public lot search near meet points | none | on demand only |
 | OpenRouteService (HeiGIT) | real road drive times (matrix) and lead routes (directions) | free Standard key, on device | cached; a first build uses ~10 requests; falls back to estimates (≈) at `avgMph` |
-| Anthropic Claude API (`claude-sonnet-5-5` default, `claude-haiku-5-5`) | Read job notes with AI; Review with AI; plain-English job entry (if chosen) | user's API key, on device | sends names, jobs, notes, minutes, rules — never addresses, phones or coordinates. Job entry sends only the typed sentence |
+| Anthropic Claude API (`claude-sonnet-5-5` default, `claude-haiku-5-5`) | Read job notes with AI; Review with AI; plain-English job entry (if chosen) | user's API key, on device | sends worker names, job names with job-site addresses, the calendar titles/notes as written, minutes, rules — never workers' home addresses, phones or coordinates. Job entry sends only the typed sentence |
 | Chrome built-in AI (Prompt API, `LanguageModel`, Gemini Nano) | plain-English job entry | none, free | Chrome 148+ on desktops with enough GPU/RAM/disk; not phones. Runs on the device. One-time ~2–4 GB download started by Settings → Test |
 | Google Gemini API (`gemini-2.5-flash` default, editable) | plain-English job entry | user's free AI Studio key, on device | sends only the typed sentence (no roster). Free tier may be used by Google to improve products — the Settings card says so |
 
 ### Main code areas (search these names in `index.html`)
 
-- Import: `parseJobTitle`, `parseICS`, `parseKML`, `rowsToPlaces`, `importPlaces`, `pickDay`, `findRequested`, `countsFrom`
+- Import: `parseJobTitle`, `parseICS` (two passes: collect events, then one job per covered day via `icsDays` — multi-day spans from DTEND, repeats from RRULE with INTERVAL / COUNT / UNTIL / BYDAY / BYMONTHDAY / EXDATE, worked out from 14 days back to 120 days ahead; a RECURRENCE-ID event replaces that day of its series; timed events under 24 h stay one day; jobs carry `multi` = “day 2 of 5” / “repeats”), `parseKML`, `rowsToPlaces`, `importPlaces`, `pickDay`, `findRequested`, `countsFrom`
 - Geocoding: `geocodeAddress` (saved spot `placeGet` → `geoCandidates`: cleaned address via `cleanAddr`/`hwyVariants`, then road without house number, ZIP, town → `geoAll` asks every service → `geoFit` keeps the result in the typed town/ZIP and within `FAR_MI` of the crew; otherwise the best fallback), `geocodeMissing`, saved spots `placeSave`/`placeForget` (saved when a location is pasted by hand; forgotten when the user clears it). "Look up again" (`refindJobs`/`refindWorkers`) retries orange ones and keeps the old spot if nothing better is found. Location checks: `locWarn` (wrong town vs. the typed address, town-center-only match, or > `FAR_MI` (75) mi from every worker), shown in orange on job/worker lists and forms, a Today banner, and `jobIssues`. Jobs/workers keep the full lookup label in `geoLabel`; "Set by hand" locations are never flagged.
 - Routing: `travel` (cached real time or estimate), `ors`, `orsMatrix`, `orsRoute`, `warmBeforeSolve`, `warmPlans`, `planPairs`, `meetPoint`
 - Matching: `solve` → `solveInner` (greedy: leads → workers → spare leads, then local search with moves/swaps/chains, ~6–24 random restarts), `pairCrew` (also picks which leads drive when there are extra leads: tries each choice, up to 8 leads, lowest total minutes; honors `forced` = Make driver, `leadPen` = past mile limit), `jobScore`
 - Per-truck view: `trucksFor` (also the optional extra truck: compares crew minutes with T vs T+1 trucks via `legFor`; `truckLabel`), `legFor` (lead / pickup / meet / atlead / atjob / job), `planTruck` (leave-by timeline), `jobIssues`
 - Layout: `render` (tabs `tonight`/`workers`/`history`/`settings`), `rTonight` with `stepWrap` (collapsible steps, `todayOpen` overrides, reset on build/new day), `moreMenu`, `rActionBar` (bottom bar), `goSettings(cardId, openId)` for links into Settings; Settings = `rSettings` → `rRouteSettings`, `rAISettings`, `rBackupCard`, `rHelpCard` (wraps `rHelp` sections as `<details>`), `rDeleteCard`; pair lists `rPairs` on Workers
-- Day being scheduled: `scheduleDay()` = `tonight.day` → first job's calendar day → today. `rDayPicker`, `setScheduleDay`, `dayWord`. Used by the copied schedule, History save, step titles. Hand-added jobs have no `day` of their own; they follow `tonight.day`. Cleared by Start new day; a past `day` with no jobs resets to today.
-- Output: `rResults`, `scheduleText`, `scheduleCSV`, `rMap`
+- Day being scheduled: `scheduleDay()` = `tonight.day` → first job's calendar day → `defaultDay()` (today; tomorrow from `EVENING_HOUR` = 15:00). `pinDay()` fixes it once a job is typed or crews are built. `dayIsPast()` drives the red warning in `rDayPicker` and the confirm on Copy schedule. `rDayPicker`, `setScheduleDay`, `dayWord`. Used by the copied schedule, History save, step titles. Hand-added jobs have no `day` of their own; they follow `tonight.day`. Cleared by Start new day; a past `day` with no jobs resets to today.
+- Output: `rResults`, `scheduleText`, `scheduleCSV`, `rMap`; `skippedJobs()` (ticked jobs with no crew entry) feeds the red note and the “NOT SCHEDULED YET” list
+- Saving: `save` → `lsSave` (on a failed write `freeSpace()` drops the lookup / drive-time / import / log caches and retries; still failing sets `saveFailed` → “NOT SAVED” in the top bar and `saveFailBanner` on every tab). `navigator.storage.persist()` is requested at start when there are workers. Backup reminder: `backupDue` / `backupBanner` / `markBackedUp` (`BACKUP_DAYS` = 7, skipped for sample data and under 3 workers). Messages: `toast(msg,{action,fn,ms})` stacks up to 3, stays longer for long text, tap to dismiss; used for Undo on job delete.
+- Report times: `parseClock` reads “7:00a”, “630a”, and a/p-less “7”, “7:00”, “0700”, “15:30” (24-hour reading); `normTime` tidies on Save job; unreadable times are flagged in `jobIssues`.
 - History: `saveDayToHistory`, `histEdit`, `rHistory`, `rHistDay`, `rHistSearch`, `historyCSV`, `fileConnect`/`fileSync`, `mergeHistory`
 - AI: `askClaude`, `aiReadNotes`, `aiReview`, `applySuggestion`
 - Plain-English job entry: `readJobText` (engine order for Automatic: `jtBuiltin` → `jtGemini` → `jtClaude`, falls back to `jtBasic`, the offline regex reader), `jobTextFill` (fills the form fields and requested chips; names matched on the device by `jtPerson`/`jtNameKeys` — full, unique first or unique last name; `formAI` carries don't-send + note to `saveJob`), `rJobTextBox`, `rJobTextSettings`, `jtCfg`
@@ -103,7 +108,7 @@ On the Claude artifact the roster/today also sync through the artifact database 
 
 1. Edit `index.html`.
 2. Bump `APP_VERSION` (format `YYYY.MM.DD-letter`) and add an entry at the top of `CHANGELOG` (`added` / `fixed`, plain language for the dispatcher).
-3. Test in a headless browser (Playwright): sample data (“Try it with sample data”), build crews, and the feature touched. Mock external APIs (ORS, Claude, Overpass, Nominatim) — they aren't reachable from Claude's workspace.
+3. Test in a headless browser (Playwright): run `node tests/checks.js` (matching rules on random days, the schedule, History, backups, calendar reading, storage-full, version/doc sync) and add a check there for the feature touched. Mock external APIs (ORS, Claude, Overpass, Nominatim) — they aren't reachable from Claude's workspace.
 4. Regenerate `CHANGELOG.md` from the `CHANGELOG` array; update this file if rules/architecture changed.
 5. Commit and push to `main` (GitHub Pages updates in 1–2 minutes). Users close/reopen the app; What's new pops up once.
 6. Also republish the Claude artifact (slug `bec01df9-3b49-428f-ad6b-c555570c7da6`) and send a versioned copy `crew-scheduler-v<version>.html` if the owner wants a file.
@@ -119,7 +124,7 @@ Never commit backups, support packs, CSVs or keys (`.gitignore` blocks `*.json`,
 
 ## 7. Known limits
 
-- Data lives on each device; sharing is by backup files (the Claude-artifact version syncs, but can't reach outside services).
+- Data lives on each device (a browser can clear it; the app asks it not to and reminds about backups weekly); sharing is by backup files (the Claude-artifact version syncs, but can't reach outside services).
 - iPhone can't run a downloaded `.html`; use the website + Add to Home Screen.
 - Free map services aren't for heavy commercial use; no live traffic in drive times.
 - Calendar title format is specific to this company (the AI notes reader helps with other formats).
@@ -153,4 +158,5 @@ Never commit backups, support packs, CSVs or keys (`.gitignore` blocks `*.json`,
 | Nov 11, 2026 | Extra leads on a job: driver = least total crew driving (was: closest to the job), plus a Make driver override. Found from a Siler City job where the Asheboro-area lead drove and two Fayetteville people (one a lead) each drove ~65 mi alone |
 | Nov 11, 2026 | Optional extra truck for a spare lead (off by default): only when they'd drive alone anyway or it saves ≥ 10 min; max one per job; crew size unchanged |
 | Nov 11, 2026 | Plain-English job entry (off by default): AI only fills the Add a job form for review, never changes crews or drivers. Free first: Chrome built-in AI, then a free Gemini key, then the existing Claude key; basic offline reader always as the fallback. Only the typed sentence is sent; the roster is matched on the device |
+| Nov 14, 2026 | Full review, then a safety release (2026.11.14-a): failed saves are loud, backup reminder, skipped jobs shown on the schedule, past-date warning, unticked jobs come off at once. Multi-day and repeating calendar events load on every day they cover (owner's call until the dispatcher confirms how the calendar is used). "Scheduling for" starts on Tomorrow from 3 p.m. AI wording corrected: job-site addresses and calendar notes are sent, home addresses and phones never. Release checks saved in `tests/checks.js` |
 | Nov 12, 2026 | "Scheduling for" day choice (Today / Tomorrow / date) on Today, so hand-typed jobs can be scheduled for the next day; schedule and History use it |

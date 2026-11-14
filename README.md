@@ -6,6 +6,6 @@ Builds daily crews from the job calendar: one crew lead (with the company truck)
 
 Open it at **https://maynard4307.github.io/crew-scheduler/** and on a phone tap Share → Add to Home Screen.
 
-Worker and job data stays on each device (browser storage). Use **Workers → Save backup file** to move it between devices or versions. Never commit backup or support-pack files to this repository.
+Worker and job data stays on each device (browser storage). Use **Settings → Backup & restore → Save backup file** to move it between devices or versions, and save one regularly: the app reminds you after a week. Never commit backup or support-pack files to this repository.
 
-To update: replace `index.html` with the new version.
+To update: follow the release steps in HANDOFF.md §5 (run `node tests/checks.js` first).
