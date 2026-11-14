@@ -2,6 +2,25 @@
 
 Tap the version number at the top of the app to see this inside Crew Scheduler.
 
+## 2026.11.14-a — Nov 14, 2026
+
+**New**
+- Backup reminder: if your workers haven't been backed up in a week, Today shows a reminder with a Save backup file button. Settings → Backup & restore shows when the last backup was made.
+- A job that runs several days on the calendar (one event from Monday to Friday), or one that repeats, now shows up on every day it covers when you open the job file. It's marked “day 2 of 5” or “repeats” in the job list.
+- From 3 p.m. on, “Scheduling for” starts on Tomorrow, since the next day's jobs come in at night. Tap Today if you mean today.
+- Removing a job with × now shows an Undo button for a few seconds.
+- Messages at the bottom of the screen stay up longer when they're long, and you can tap one to dismiss it.
+
+**Fixed**
+- If the phone or browser ran out of storage space, changes could fail to save while the top still said “Saved”. The app now clears out old remembered lookups to make room by itself, and if a save still fails it shows a red “NOT SAVED” warning telling you to save a backup file.
+- A job with no map location was left off the crews and the copied schedule without a word, and the screen still said every truck was covered. Now a red note lists any job that isn't on the schedule, and the copied schedule ends with a “NOT SCHEDULED YET” list.
+- If yesterday's jobs were still loaded and you typed in new ones, the schedule went out with yesterday's date and was saved over yesterday in History. Now a red note warns when the day has already passed, with a Start new day button, and Copy schedule asks before using an old date.
+- Unticking a job after crews were built left it in the crews and in the copied schedule until you rebuilt. Now it comes off right away and its people are free.
+- When you load a new day's jobs, the app asks whether to keep the people who were marked off before, so nobody stays off by accident.
+- A report time typed without a or p (like 7:00 or 0700) gave no leave-by times. It's now read as a morning time (7:00a) and tidied when you save, and a time that can't be read is flagged on the job.
+- “Delete everything” now also clears saved map spots, remembered address lookups and drive times, the last calendar import and the support log. Only your keys stay, and the screen says so.
+- The AI notes said no addresses are sent. To be exact: job-site addresses and the calendar notes are sent to the AI when you use it; workers' home addresses and phone numbers never are. The wording now says that.
+
 ## 2026.11.12-a — Nov 12, 2026
 
 **New**

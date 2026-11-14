@@ -95,7 +95,9 @@ svg.map{width:100%;height:auto;background:var(--bg);border:1px solid var(--line)
 details summary{cursor:pointer;font-weight:600}
 .modalbg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:20;padding:16px}
 .modal{background:var(--card);border-radius:14px;padding:18px;max-width:420px;width:100%;border:1px solid var(--line)}
-.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:9px;font-size:14px;z-index:30;max-width:90vw}
+#toasts{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:30;display:flex;flex-direction:column;gap:6px;align-items:center;width:max-content;max-width:92vw;pointer-events:none}
+.toast{background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:9px;font-size:14px;max-width:100%;pointer-events:auto;cursor:pointer;display:flex;gap:12px;align-items:center}
+.toast button{background:transparent;color:inherit;border:1px solid currentColor;border-radius:7px;padding:4px 10px;font:inherit;font-weight:600;cursor:pointer;white-space:nowrap}
 .hide{display:none!important}
 ol.help li{margin-bottom:8px}
 code{background:var(--chip);padding:1px 5px;border-radius:5px;font-size:13px;overflow-wrap:anywhere}
@@ -115,7 +117,7 @@ details.more .menu .b{width:100%;text-align:left}
 #actionBar .b{flex:1;justify-content:center;text-align:center}
 #actionBar .hint{flex:1;font-size:13px;color:var(--muted)}
 body.hasBar main{padding-bottom:90px}
-body.hasBar .toast{bottom:84px}
+body.hasBar #toasts{bottom:84px}
 .jump{display:flex;flex-wrap:wrap;gap:6px}
 .secHd{margin:22px 4px 8px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
 details.hsec{border-top:1px solid var(--line);padding:8px 0}
@@ -141,9 +143,10 @@ details.hsec>summary{font-weight:600;cursor:pointer;padding:4px 0}
 <script>
 "use strict";
 /* ---------- state ---------- */
-const APP_VERSION="2026.11.12-a";
+const APP_VERSION="2026.11.14-a";
 /* Release notes — newest first. Add an entry here with every update. */
 const CHANGELOG=[
+ {v:"2026.11.14-a",date:"Nov 14, 2026",added:["Backup reminder: if your workers haven't been backed up in a week, Today shows a reminder with a Save backup file button. Settings → Backup & restore shows when the last backup was made.","A job that runs several days on the calendar (one event from Monday to Friday), or one that repeats, now shows up on every day it covers when you open the job file. It's marked “day 2 of 5” or “repeats” in the job list.","From 3 p.m. on, “Scheduling for” starts on Tomorrow, since the next day's jobs come in at night. Tap Today if you mean today.","Removing a job with × now shows an Undo button for a few seconds.","Messages at the bottom of the screen stay up longer when they're long, and you can tap one to dismiss it."],fixed:["If the phone or browser ran out of storage space, changes could fail to save while the top still said “Saved”. The app now clears out old remembered lookups to make room by itself, and if a save still fails it shows a red “NOT SAVED” warning telling you to save a backup file.","A job with no map location was left off the crews and the copied schedule without a word, and the screen still said every truck was covered. Now a red note lists any job that isn't on the schedule, and the copied schedule ends with a “NOT SCHEDULED YET” list.","If yesterday's jobs were still loaded and you typed in new ones, the schedule went out with yesterday's date and was saved over yesterday in History. Now a red note warns when the day has already passed, with a Start new day button, and Copy schedule asks before using an old date.","Unticking a job after crews were built left it in the crews and in the copied schedule until you rebuilt. Now it comes off right away and its people are free.","When you load a new day's jobs, the app asks whether to keep the people who were marked off before, so nobody stays off by accident.","A report time typed without a or p (like 7:00 or 0700) gave no leave-by times. It's now read as a morning time (7:00a) and tidied when you save, and a time that can't be read is flagged on the job.","“Delete everything” now also clears saved map spots, remembered address lookups and drive times, the last calendar import and the support log. Only your keys stay, and the screen says so.","The AI notes said no addresses are sent. To be exact: job-site addresses and the calendar notes are sent to the AI when you use it; workers' home addresses and phone numbers never are. The wording now says that."]},
  {v:"2026.11.12-a",date:"Nov 12, 2026",added:["New “Scheduling for” choice at the top of step 1 on Today: tap Today or Tomorrow, or pick any date. Jobs you add by hand go on that day, and the copied schedule and History use that date. Step 1 and 2 titles say which day you're working on.","When you open a job file, the day list starts on the day you picked, and loading a day's jobs sets “Scheduling for” to match. If loaded calendar jobs are for a different day than the one picked, a note says so."]},
  {v:"2026.11.11-d",date:"Nov 11, 2026",added:["New option: type a job in plain English. Turn it on in Settings → Type jobs in plain English, then tap + Add a job and type something like “Smith mowing, 412 Oak St Raeford, 7am, 2 trucks of 3, req Marcus, no Kevin”. Tap Fill in the form and it fills in the name, time, address, trucks, crew size and who's requested, for you to check before you Save. It only fills the form: who goes where and who drives is still up to your scheduling rules.","It uses free AI first: the AI built into newer Chrome on a PC (stays on your computer), or Google Gemini with a free key you paste in Settings. With no AI or no internet, a basic reader still picks out the time, trucks, crew size and names. Only the sentence you type is sent, never your worker list or addresses. Off until you turn it on."]},
  {v:"2026.11.11-c",date:"Nov 11, 2026",added:["New option in Settings → Scheduling rules: when a job has a spare crew lead, they can bring their own truck as an extra truck when they'd drive to the job alone anyway, or when it saves the crew at least 10 minutes of driving. The crew size stays the same, and workers ride with whichever truck passes closest to them. It's shown as “Truck 2 (extra)” on the crews and the schedule. Off until you turn it on."]},
@@ -183,6 +186,22 @@ const leadLimit=w=>{const own=+(w&&w.maxMiles)||0;return own>0?own:(+S().maxLead
 let roster={workers:[],conflicts:[],prefers:[],settings:{...DEFAULT_SETTINGS}};
 let tonight={jobs:[],assign:null,locks:{},off:[],importedAt:null,source:""};
 let tab="tonight";
+let rosterChangedAt=0,storagePersisted=null;
+/* Backup reminder: everything lives in this one browser, so nudge when the workers haven't been backed up lately. */
+const BACKUP_DAYS=7;
+function backupInfo(){return lsGet("crew_backup")||{}}
+function markBackedUp(){const b=backupInfo();b.at=new Date().toISOString();b.n=roster.workers.length;delete b.snooze;lsSet("crew_backup",b)}
+function backupDue(){
+  const real=roster.workers.filter(w=>!/\(sample\)$/.test(w.name||""));if(real.length<3)return null;
+  const b=backupInfo();if(b.snooze&&Date.now()<b.snooze)return null;
+  if(!b.at)return {never:true};
+  const days=Math.floor((Date.now()-new Date(b.at).getTime())/864e5);
+  return days>=BACKUP_DAYS?{days}:null;
+}
+function backupBanner(){
+  const d=backupDue();if(!d)return "";
+  return `<div class="card" style="border-color:var(--warn);background:var(--warn-bg)"><div class="row" style="justify-content:space-between"><span><b>💾 ${d.never?"No backup yet":"Last backup was "+d.days+" days ago"}.</b> Your workers and History live only in this browser. Save a backup file and email it to yourself.</span><span class="row"><button class="b small p" data-act="saveRoster">Save backup file</button><button class="b small" data-act="backupLater">Later</button></span></div></div>`;
+}
 let editingWorker=null; // id or "new"
 let editingJob=null;
 const PALETTE=["#1f77b4","#d62728","#2ca02c","#9467bd","#ff7f0e","#17becf","#8c564b","#e377c2","#7f7f7f","#bcbd22","#3366cc","#dc3912","#109618","#990099","#0099c6","#dd4477"];
@@ -196,8 +215,24 @@ const S=()=>roster.settings;
 let db=null, dbOK=false;
 const saveTimers={}, lastWritten={}, writing={};
 function lsGet(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}
-function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
-function setSave(t){$("#saveState").textContent=t}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}}
+function setSave(t){const el=$("#saveState");el.textContent=saveFailed?"⚠ NOT SAVED":t;el.style.color=saveFailed?"var(--bad)":""}
+/* The browser gives each site a few MB. When it is full a save fails: first drop what can be looked up again
+   (address lookups, road times, the last import, the log), then try once more. If it still fails, say so loudly —
+   never show "Saved" for something that wasn't. */
+let saveFailed=false;
+function freeSpace(){
+  try{for(const k in geoCache)delete geoCache[k];for(const k in RG)delete RG[k];for(const k in RC)delete RC[k];LOG.length=0;
+    ["crew_geo","crew_rg","crew_rc","crew_lastimport","crew_log"].forEach(k=>localStorage.removeItem(k))}catch(e){}
+}
+function lsSave(k,v){
+  let ok=lsSet(k,v);
+  if(!ok){freeSpace();ok=lsSet(k,v);logEvent(ok?"storage":"error",ok?"Storage was full — cleared remembered lookups and drive times to make room":"Save failed: browser storage is full or blocked ("+k+")")}
+  const was=saveFailed;saveFailed=!ok;
+  if(was!==saveFailed)setTimeout(render,0);
+  return ok;
+}
+const saveFailBanner=()=>saveFailed?`<div class="bad" style="margin:0 0 10px;font-size:14px"><b>⚠ Your last changes are NOT saved.</b> This browser's storage for the app is full or blocked (private browsing can cause this). Don't close the app: go to <a href="#" data-act="jump" data-to="backupCard">Settings → Backup &amp; restore</a> and tap <b>Save backup file</b> now so nothing is lost, then send a support pack.</div>`:"";
 function normalize(){
   roster.workers=roster.workers||[];roster.conflicts=roster.conflicts||[];roster.prefers=roster.prefers||[];
   if(roster.settings&&roster.settings.maxLeadMiles===undefined)roster.settings.maxLeadMiles=roster.settings.maxMiles||0;
@@ -207,7 +242,8 @@ function normalize(){
 }
 function save(which){
   const obj=which==="roster"?roster:tonight;
-  lsSet("crew_"+which,obj);
+  lsSave("crew_"+which,obj);
+  if(which==="roster")rosterChangedAt=Date.now();
   if(!dbOK){setSave("Saved on this device");return}
   clearTimeout(saveTimers[which]);
   setSave("Saving…");
@@ -234,6 +270,8 @@ async function initDB(){
   const lr=lsGet("crew_roster"),lt=lsGet("crew_tonight");
   if(lr)roster=lr; if(lt)tonight=lt; normalize(); render();
   setSave("Saved on this device");
+  // ask the browser not to clear this site's data on its own (iPhones can do that to sites left unopened)
+  try{if(navigator.storage&&navigator.storage.persist&&roster.workers.length)navigator.storage.persist().then(ok=>{storagePersisted=!!ok}).catch(()=>{})}catch(e){}
   if(!window.claude||!window.claude.use)return;
   try{db=await window.claude.use("db")}catch(e){db=null}
   if(!db)return;
@@ -254,7 +292,7 @@ async function initDB(){
       if(saveTimers[which]||writing[which])return; // local edit in flight wins
       lastWritten[which]=json;
       if(which==="roster")roster=JSON.parse(json);else tonight=JSON.parse(json);
-      normalize();lsSet("crew_"+which,which==="roster"?roster:tonight);
+      normalize();lsSave("crew_"+which,which==="roster"?roster:tonight);
       if(!document.activeElement||!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))render();
       if(!snap.metadata||!snap.metadata.fromCache)setSave("All changes saved");
     },err=>{settled=true;clearTimeout(timer);dbOK=false;setSave("Saved on this device")});
@@ -435,30 +473,99 @@ function icsDate(v){
   return m[7]?new Date(Date.UTC(+m[1],m[2]-1,+m[3],+m[4],+m[5],+(m[6]||0))):new Date(+m[1],m[2]-1,+m[3],+m[4],+m[5],+(m[6]||0));
 }
 const dayKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+/* Which calendar days an event covers.
+   - A job entered as one event over several days (Mon–Fri) counts on every one of those days.
+   - A repeating event (RRULE: daily / weekly / monthly / yearly, with INTERVAL, COUNT, UNTIL, BYDAY, BYMONTHDAY,
+     EXDATE) counts on every repeat. Repeats are worked out from 2 weeks back to about 4 months ahead.
+   Returns [{day:"YYYY-MM-DD", n, of}] — n of `of` for multi-day events. */
+const ICS_BACK=14, ICS_AHEAD=120, ICS_MAXSPAN=62;
+const addDays=(d,n)=>new Date(d.getFullYear(),d.getMonth(),d.getDate()+n);
+function icsDays(ev,skip){
+  const start=icsDate(ev.start);if(!start)return [];
+  const allDay=!ev.start.includes("T");
+  const d0=new Date(start.getFullYear(),start.getMonth(),start.getDate());
+  let span=1;const end=icsDate(ev.end);
+  if(end&&end>start&&(allDay||end-start>864e5)){   // a timed job under 24 h (even one that runs past midnight) is one day
+    const e0=new Date(end.getFullYear(),end.getMonth(),end.getDate());
+    const endsAtMidnight=allDay||(end.getHours()===0&&end.getMinutes()===0);
+    span=Math.max(1,Math.min(ICS_MAXSPAN,Math.round((e0-d0)/864e5)+(endsAtMidnight?0:1)));
+  }
+  const starts=[];
+  if(!ev.rrule)starts.push(d0);
+  else{
+    const now=new Date(),today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+    const lo=addDays(today,-ICS_BACK-span),hi=addDays(today,ICS_AHEAD);
+    const R={};String(ev.rrule).split(";").forEach(x=>{const i=x.indexOf("=");if(i>0)R[x.slice(0,i).trim().toUpperCase()]=x.slice(i+1).trim().toUpperCase()});
+    const iv=Math.max(1,parseInt(R.INTERVAL)||1),count=parseInt(R.COUNT)||0;
+    let until=null;if(R.UNTIL){const u=icsDate(R.UNTIL.replace(/Z$/,"Z"));if(u)until=new Date(u.getFullYear(),u.getMonth(),u.getDate())}
+    const WD=["SU","MO","TU","WE","TH","FR","SA"];
+    const by=(R.BYDAY||"").split(",").map(x=>{const m=x.match(/^([+-]?\d+)?([A-Z]{2})$/);return m&&WD.includes(m[2])?{n:+(m[1]||0),d:WD.indexOf(m[2])}:null}).filter(Boolean);
+    const bmd=(R.BYMONTHDAY||"").split(",").map(Number).filter(n=>n&&isFinite(n));
+    const ex=new Set([...(ev.exdates||[]),...(skip||[])]);
+    let made=0;
+    // returns false when the series is finished (or past the window)
+    const push=d=>{if(d<d0)return true;if(until&&d>until)return false;if(count&&made>=count)return false;made++;if(d>hi)return false;if(d>=lo&&!ex.has(dayKey(d)))starts.push(d);return true};
+    const monthDays=(y,m)=>{   // days of one month this rule lands on
+      const last=new Date(y,m+1,0).getDate();let ds=[];
+      const ord=by.filter(x=>x.n);
+      if(ord.length){for(const x of ord){const all=[];for(let d=1;d<=last;d++)if(new Date(y,m,d).getDay()===x.d)all.push(d);const pickd=x.n>0?all[x.n-1]:all[all.length+x.n];if(pickd)ds.push(pickd)}}
+      else if(by.length){for(let d=1;d<=last;d++)if(by.some(x=>x.d===new Date(y,m,d).getDay()))ds.push(d)}
+      else if(bmd.length)ds=bmd.map(n=>n>0?n:last+1+n).filter(d=>d>=1&&d<=last);
+      else if(d0.getDate()<=last)ds=[d0.getDate()];
+      return [...new Set(ds)].sort((a,c)=>a-c).map(d=>new Date(y,m,d));
+    };
+    let go=true;
+    if(R.FREQ==="DAILY"){for(let i=0;go&&i<6000;i++){const d=addDays(d0,i*iv);if(by.length&&!by.some(x=>x.d===d.getDay()))continue;go=push(d)}}
+    else if(R.FREQ==="WEEKLY"){
+      const days=by.length?by.map(x=>x.d):[d0.getDay()];const wk=Math.max(0,WD.indexOf(R.WKST||"MO"));
+      const w0=addDays(d0,-((d0.getDay()-wk+7)%7));
+      for(let k=0;go&&k<1500;k++)for(let o=0;go&&o<7;o++){const d=addDays(w0,k*iv*7+o);if(days.includes(d.getDay()))go=push(d)}
+    }
+    else if(R.FREQ==="MONTHLY"){for(let k=0;go&&k<600;k++){const m=new Date(d0.getFullYear(),d0.getMonth()+k*iv,1);for(const d of monthDays(m.getFullYear(),m.getMonth())){go=push(d);if(!go)break}}}
+    else if(R.FREQ==="YEARLY"){for(let k=0;go&&k<80;k++){const y=d0.getFullYear()+k*iv;const ds=by.length||bmd.length?monthDays(y,d0.getMonth()):[new Date(y,d0.getMonth(),d0.getDate())].filter(d=>d.getMonth()===d0.getMonth());for(const d of ds){go=push(d);if(!go)break}}}
+    else starts.push(d0);   // a kind of repeat this reader doesn't know: at least keep the first day
+  }
+  const out=[],seen=new Set();
+  for(const st of starts)for(let i=0;i<span;i++){const k=dayKey(addDays(st,i));if(!seen.has(k)){seen.add(k);out.push({day:k,n:i+1,of:span})}}
+  return out;
+}
 function parseICS(text){
-  const lines=text.replace(/\r?\n[ \t]/g,"").split(/\r?\n/);const out=[];let ev=null;let cal="";
+  const lines=text.replace(/\r?\n[ \t]/g,"").split(/\r?\n/);const evs=[];let ev=null;let cal="";
   const un=s=>s.replace(/\\n/gi,"\n").replace(/\\([,;\\])/g,"$1").trim();
   for(const l of lines){
     if(l.startsWith("X-WR-CALNAME:"))cal=un(l.slice(13));
-    if(l==="BEGIN:VEVENT")ev={raw:[l]};
-    else if(l==="END:VEVENT"){
-      if(ev&&ev.status!=="CANCELLED"){
-        const t=parseJobTitle(ev.sum);
-        const c=ev.geo||parseCoords(ev.loc);
-        const start=icsDate(ev.start);
-        const dc=countsFrom(ev.desc);
-        const trucks=t.trucks||dc.trucks||null, crew=t.per||dc.per||null;
-        out.push({header:!!t.header,name:t.header?ev.sum:(t.name||ev.sum||"Job"),title:ev.sum||"",time:t.header?"":(t.time||(start&&ev.start.includes("T")?start.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}):"")),
-          address:stripCounts((ev.loc||t.place||"").replace(/\n/g,", ")),place:t.place||"",lat:c?c.lat:null,lng:c?c.lng:null,desc:(ev.desc||"").slice(0,1500),start:start?start.toISOString():null,day:start?dayKey(start):"",cal,crew,trucks,rrule:!!ev.rrule,raw:ev.raw.concat("END:VEVENT").join("\n")});
-      }
-      ev=null;
-    }
+    if(l==="BEGIN:VEVENT")ev={raw:[l],exdates:[]};
+    else if(l==="END:VEVENT"){if(ev){ev.cal=cal;evs.push(ev)}ev=null}
     else if(ev){
       ev.raw.push(l);
       const i=l.indexOf(":");if(i<0)continue;const k=l.slice(0,i).split(";")[0].toUpperCase(),v=l.slice(i+1);
       if(k==="SUMMARY")ev.sum=un(v);else if(k==="LOCATION")ev.loc=un(v);else if(k==="DESCRIPTION")ev.desc=un(v);
       else if(k==="GEO"){const [a,b]=v.split(/[;,]/).map(Number);if(isFinite(a)&&isFinite(b))ev.geo={lat:a,lng:b}}
-      else if(k==="DTSTART")ev.start=v.trim();else if(k==="STATUS")ev.status=v.trim().toUpperCase();else if(k==="RRULE")ev.rrule=v;
+      else if(k==="DTSTART")ev.start=v.trim();else if(k==="DTEND")ev.end=v.trim();else if(k==="STATUS")ev.status=v.trim().toUpperCase();else if(k==="RRULE")ev.rrule=v.trim();
+      else if(k==="UID")ev.uid=v.trim();else if(k==="RECURRENCE-ID")ev.recId=v.trim();
+      else if(k==="EXDATE")v.split(",").forEach(x=>{const d=icsDate(x.trim());if(d)ev.exdates.push(dayKey(d))});
+    }
+  }
+  // one changed or cancelled day of a repeating job comes as its own event: that day is taken from it, not from the series
+  const moved={};
+  for(const e of evs)if(e.uid&&e.recId){const d=icsDate(e.recId);if(d)(moved[e.uid]=moved[e.uid]||[]).push(dayKey(d))}
+  const out=[];
+  for(const ev of evs){
+    if(ev.status==="CANCELLED")continue;
+    const t=parseJobTitle(ev.sum);
+    const c=ev.geo||parseCoords(ev.loc);
+    const start=icsDate(ev.start);
+    const dc=countsFrom(ev.desc);
+    const trucks=t.trucks||dc.trucks||null, crew=t.per||dc.per||null;
+    const timed=start&&ev.start.includes("T");
+    const base={header:!!t.header,name:t.header?ev.sum:(t.name||ev.sum||"Job"),title:ev.sum||"",time:t.header?"":(t.time||(timed?start.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}):"")),
+      address:stripCounts((ev.loc||t.place||"").replace(/\n/g,", ")),place:t.place||"",lat:c?c.lat:null,lng:c?c.lng:null,desc:(ev.desc||"").slice(0,1500),cal:ev.cal,crew,trucks,rrule:!!ev.rrule,raw:ev.raw.concat("END:VEVENT").join("\n")};
+    const days=ev.recId?[{day:start?dayKey(start):"",n:1,of:1}]:icsDays(ev,ev.uid&&!ev.recId?moved[ev.uid]:null);
+    if(!days.length){if(!start)out.push({...base,start:null,day:"",multi:""});continue}   // undated events are kept as before
+    for(const d of days){
+      const [y,m,dd]=d.day?d.day.split("-").map(Number):[];
+      const st=d.day?new Date(y,m-1,dd,timed?start.getHours():0,timed?start.getMinutes():0):null;
+      out.push({...base,start:st?st.toISOString():null,day:d.day,multi:d.of>1?`day ${d.n} of ${d.of}`:(ev.rrule?"repeats":"")});
     }
   }
   return out;
@@ -533,7 +640,7 @@ function findRequested(text){
   }
   return [...out];
 }
-const toJob=p=>({id:uid(),name:p.name,title:p.title||"",time:p.time||"",day:p.day||"",address:p.address||"",place:p.place||"",lat:p.lat,lng:p.lng,geoNote:"",desc:p.desc||"",folder:p.folder||"",crew:p.crew||S().defaultCrew,trucks:p.trucks||1,requested:findRequested((p.title||p.name||"")+" \n "+(p.desc||"")),on:true});
+const toJob=p=>({id:uid(),name:p.name,title:p.title||"",time:p.time||"",day:p.day||"",multi:p.multi||"",address:p.address||"",place:p.place||"",lat:p.lat,lng:p.lng,geoNote:"",desc:p.desc||"",folder:p.folder||"",crew:p.crew||S().defaultCrew,trucks:p.trucks||1,requested:findRequested((p.title||p.name||"")+" \n "+(p.desc||"")),on:true});
 function setJobs(places,source){
   tonight.jobs=places.map(toJob);
   tonight.assign=null;tonight.locks={};tonight.importedAt=new Date().toISOString();tonight.source=source;
@@ -550,6 +657,7 @@ async function addJobs(places,source){
     else{tonight.jobs.push(...places.map(toJob));tonight.assign=null;save("tonight")}
   } else setJobs(places,source);
   const pd=(places.find(p=>isDayKey(p.day))||{}).day;if(pd){tonight.day=pd;save("tonight")}
+  await checkOffList();
   const nReq=tonight.jobs.filter(j=>(j.requested||[]).length).length;
   render();toast(`${places.length} job(s) loaded${heads?` · ${heads} heading(s) skipped`:""}${nReq?` · ${nReq} with requested crew`:""}`);
   geocodeMissing("jobs");
@@ -569,7 +677,7 @@ function pickDay(evs){
       const counts={};pool.forEach(e=>{if(e.day)counts[e.day]=(counts[e.day]||0)+1});
       let days=Object.keys(counts).filter(d=>d>=fromK&&d<=toK).sort();
       if(!days.length)days=Object.keys(counts).sort().reverse().slice(0,20);
-      const sd=isDayKey(tonight.day)?tonight.day:"";const def=days.includes(sd)?sd:days.includes(today)?today:(days.find(d=>d>=today)||days[days.length-1]);
+      const sd0=scheduleDay(),sd=sd0<today?defaultDay():sd0;const def=days.includes(sd)?sd:days.includes(today)?today:(days.find(d=>d>=today)||days[days.length-1]);
       const lab=d=>{const [y,m,dd]=d.split("-").map(Number);const dt=new Date(y,m-1,dd);return dt.toLocaleDateString([], {weekday:"short",month:"short",day:"numeric"})+(d===today?" (today)":d===tomorrow?" (tomorrow)":"")};
       bg.querySelector("#pkDay").innerHTML=days.map(d=>`<option value="${d}" ${d===def?"selected":""}>${esc(lab(d))} — ${counts[d]} job${counts[d]>1?"s":""}</option>`).join("")||`<option value="">No dated events found</option>`;
     };
@@ -587,6 +695,15 @@ function pickDay(evs){
       res(chosen);
     });
   });
+}
+/* People marked off more than 12 hours ago were probably marked for an earlier day: ask before keeping them off. */
+async function checkOffList(){
+  const ids=(tonight.off||[]).filter(id=>wById(id));if(!ids.length)return;
+  if(tonight.offAt&&Date.now()-new Date(tonight.offAt).getTime()<12*36e5)return;
+  const names=ids.map(id=>wById(id).name);
+  const r=await ask(`${ids.length} ${ids.length>1?"people are":"person is"} still marked off from before: ${names.slice(0,8).join(", ")}${names.length>8?"…":""}. Keep ${ids.length>1?"them":"that person"} off for these jobs?`,"Keep off","Everyone available");
+  if(r===false)tonight.off=[];
+  tonight.offAt=new Date().toISOString();save("tonight");
 }
 let rawImportText="";
 async function importPlaces(kind,places,source){
@@ -694,7 +811,7 @@ async function geoAll(q,good){
   }
   if(!reached)throw new Error("offline");
   out=out.filter(x=>isFinite(x.lat)&&isFinite(x.lng)).slice(0,15);
-  if(out.length){geoCache[key]=out;const keys=Object.keys(geoCache);if(keys.length>800)delete geoCache[keys[0]];lsSet("crew_geo",geoCache)}
+  if(out.length){geoCache[key]=out;const keys=Object.keys(geoCache);if(keys.length>400)delete geoCache[keys[0]];lsSet("crew_geo",geoCache)}
   return out;
 }
 /* Does a result fit what was typed? In the typed town or ZIP, and not far from everyone. */
@@ -777,8 +894,8 @@ const RG=(()=>{try{return JSON.parse(localStorage.getItem("crew_rg"))||{}}catch(
 const routeMiss=new Set();let routePauseUntil=0,routeLastErr="";
 function rcSave(){
   try{
-    const ks=Object.keys(RC);if(ks.length>20000)ks.slice(0,ks.length-20000).forEach(k=>delete RC[k]);
-    const gs=Object.keys(RG);if(gs.length>400)gs.slice(0,gs.length-400).forEach(k=>delete RG[k]);
+    const ks=Object.keys(RC);if(ks.length>8000)ks.slice(0,ks.length-8000).forEach(k=>delete RC[k]);
+    const gs=Object.keys(RG);if(gs.length>150)gs.slice(0,gs.length-150).forEach(k=>delete RG[k]);
     localStorage.setItem("crew_rc",JSON.stringify(RC));localStorage.setItem("crew_rg",JSON.stringify(RG));
   }catch(e){try{for(const k in RG)delete RG[k];localStorage.setItem("crew_rg","{}");localStorage.setItem("crew_rc",JSON.stringify(RC))}catch(e2){}}
 }
@@ -887,7 +1004,16 @@ async function warmPlans(){
   if(got||routeLastErr)render();
 }
 /* Leave-by times for one truck, worked backward from the job's report time. */
-function parseClock(t){const m=String(t||"").toLowerCase().replace(/\s/g,"").match(/^(\d{1,2})(?::(\d{2}))?([ap])/);if(!m)return null;let h=+m[1]%12;if(m[3]==="p")h+=12;return h*60+(+(m[2]||0))}
+function parseClock(t){
+  const s=String(t||"").toLowerCase().replace(/[\s.]/g,"");
+  let m=s.match(/^(\d{1,2})(?::?(\d{2}))?([ap])/);
+  if(m){if(+m[1]<1||+m[1]>12||+(m[2]||0)>59)return null;let h=+m[1]%12;if(m[3]==="p")h+=12;return h*60+(+(m[2]||0))}
+  // no a/p typed ("7", "7:00", "0700", "15:30"): read it as a 24-hour clock, so 1–11 is the morning
+  m=s.match(/^(\d{1,2}):?(\d{2})$/)||s.match(/^(\d{1,2})$/);if(!m)return null;
+  const h=+m[1],mm=+(m[2]||0);return h>23||mm>59?null:h*60+mm;
+}
+/* Tidy a typed report time to the app's "7:00a" form. Returns the text unchanged when it can't be read. */
+function normTime(t){t=String(t||"").trim();if(!t)return "";const c=parseClock(t);return c==null?t:fmtClock(c)}
 const fmtClock=x=>{x=Math.round(x);x=((x%1440)+1440)%1440;let h=Math.floor(x/60),m=x%60;const ap=h>=12?"p":"a";h=h%12||12;return `${h}:${String(m).padStart(2,"0")}${ap}`};
 const fmtDur=m=>m<1?"<1 min":m<60?`${Math.round(m)} min`:`${Math.floor(m/60)} h ${String(Math.round(m%60)).padStart(2,"0")} min`;
 const floor5=x=>Math.floor(x/5)*5;
@@ -1208,6 +1334,7 @@ function jobIssues(j,crew){
   const iss=[];const cs=conflictSet();
   const offS=new Set(tonight.off);
   {const lw=locWarn(j,"job");if(lw)iss.push(["warn",`Job location looks off: ${lw} — drive times may be wrong`])}
+  if(j.time&&parseClock(j.time)==null)iss.push(["warn",`Couldn't read the report time “${j.time}” — no leave-by times. Tap the job in step 1 and type it like 7:00a`]);
   for(const wid of (j.avoid||[])){if(crew.includes(wid))iss.push(["bad",`${wById(wid)?.name} should not be sent to this job`])}
   for(const wid of (j.requested||[])){const w=wById(wid);if(!w)continue;
     if(offS.has(wid)||w.active===false)iss.push(["bad",`${w.name} was requested but is off today`]);
@@ -1228,11 +1355,24 @@ function jobIssues(j,crew){
   if(S().maxMiles)trucks.forEach(t=>t.crew.forEach(w=>{if(!w)return;const g=legFor(j,w,t);if(g&&g.kind!=="pickup"&&g.mi>S().maxMiles)iss.push(["warn",`${w.name}'s drive (${approx(g.real)}${fmtMi(g.mi)} mi) is past the ${S().maxMiles}-mile limit`])}));
   return iss;
 }
+/* Jobs that are ticked but have no crew entry: no map location, or added / turned on after crews were built. */
+function skippedJobs(){
+  if(!tonight.assign)return [];
+  return tonight.jobs.filter(j=>j.on&&!tonight.assign[j.id]).map(j=>({j,why:hasLoc(j)?"added after crews were built — tap Rebuild":"no map location yet"}));
+}
 function assignedIds(){const s=new Set();if(tonight.assign)for(const c of Object.values(tonight.assign))c.forEach(i=>s.add(i));return s}
 function availableWorkers(){const off=new Set(tonight.off);return roster.workers.filter(w=>w.active!==false&&!off.has(w.id))}
 
 /* ---------- UI helpers ---------- */
-function toast(m){const t=document.createElement("div");t.className="toast";t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),2600)}
+function toast(m,opt){
+  let box=$("#toasts");if(!box){box=document.createElement("div");box.id="toasts";document.body.appendChild(box)}
+  const t=document.createElement("div");t.className="toast";const sp=document.createElement("span");sp.textContent=m;t.appendChild(sp);
+  const ms=(opt&&opt.ms)||Math.min(12000,Math.max(3000,String(m).length*70));   // longer messages stay longer
+  const timer=setTimeout(()=>t.remove(),ms);
+  if(opt&&opt.action){const b=document.createElement("button");b.type="button";b.textContent=opt.action;b.addEventListener("click",e=>{e.stopPropagation();clearTimeout(timer);t.remove();opt.fn()});t.appendChild(b)}
+  t.title="Tap to dismiss";t.addEventListener("click",()=>{clearTimeout(timer);t.remove()});
+  box.appendChild(t);while(box.children.length>3)box.firstChild.remove();
+}
 function ask(msg,ok="OK",alt=null){
   return new Promise(res=>{
     const bg=document.createElement("div");bg.className="modalbg";
@@ -1247,7 +1387,7 @@ function colorFor(i){return PALETTE[i%PALETTE.length]}
 function render(){
   document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.tab===tab));
   const el=$("#app");
-  el.innerHTML=tab==="tonight"?rTonight():tab==="workers"?rWorkers():tab==="history"?rHistory():rSettings();
+  el.innerHTML=saveFailBanner()+(tab==="tonight"?backupBanner()+rTonight():tab==="workers"?rWorkers():tab==="history"?rHistory():rSettings());
   if(tab==="settings")jtShowBuiltin();
   rActionBar();
   const od=openCloseouts();$("#histDot")?.classList.toggle("hide",!od.length);
@@ -1293,13 +1433,13 @@ function rTonight(){
     if(oddJ.length)h+=`<div class="warn">⚠ ${oddJ.length} job location${oddJ.length>1?"s look":" looks"} off (marked below): ${esc(oddJ.map(j=>j.name).join("; ").slice(0,300))}. Drive times and crews for ${oddJ.length>1?"them":"it"} may be wrong — tap ${oddJ.length>1?"each one":"it"} to fix. <button class="b small" data-act="refindJobs" style="margin-left:6px">Look up again</button></div>`;
     if(noLoc.length)h+=`<div class="warn">${noLoc.length} job(s) have no map location yet and will be skipped. ${canFind?`<button class="b small" data-act="findJobs" style="margin-left:6px">Find locations</button>`:"Tap one to fix it."}</div>`;
     if(jobs.some(j=>j.desc||j.title))h+=aiReady()?`<div class="row" style="margin:6px 0"><button class="b small" data-act="aiNotes">🤖 Read job notes with AI</button>${tonight.aiNotesAt?`<span class="small muted">read ${new Date(tonight.aiNotesAt).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}</span>`:""}</div>`:"";
-    h+=`<details ${jobs.length<=8?"open":""}><summary class="small">Job list, trucks &amp; crew sizes</summary><div class="list">`+jobs.map(j=>`<div class="item"><input type="checkbox" data-act="jobOn" data-id="${j.id}" ${j.on?"checked":""} title="Include today"><div class="main" data-act="editJob" data-id="${j.id}" style="cursor:pointer"><div class="t">${j.time?`<span class="tag" style="margin:0 4px 0 0">${esc(j.time)}</span>`:""}${esc(j.name)}</div><div class="s">${(j.requested||[]).length?`<span style="color:var(--accent)">Requested: ${esc(j.requested.map(id=>wById(id)?.name).filter(Boolean).join(", "))}</span><br>`:""}${(j.avoid||[]).length?`<span style="color:var(--bad)">Don't send: ${esc(j.avoid.map(id=>wById(id)?.name).filter(Boolean).join(", "))}</span><br>`:""}${j.aiNote?`<span>🤖 ${esc(j.aiNote)}</span><br>`:""}${esc(j.address||j.folder||"")}${hasLoc(j)?((locWarn(j,"job")?`<br><span style="color:var(--warn)">⚠ ${esc(locWarn(j,"job"))} — tap to fix</span>`:"")):` <span style="color:var(--bad)">· ${j.address||j.place?"location not found":"no location"}</span>`}</div></div><div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end"><label class="small muted">Trucks<input type="number" min="1" max="20" value="${jTrucks(j)}" data-act="jobTrucks" data-id="${j.id}" style="margin-left:4px;width:54px"></label><label class="small muted">Per truck<input type="number" min="1" max="20" value="${jPer(j)}" data-act="jobCrew" data-id="${j.id}" style="margin-left:4px;width:54px" title="People per truck, including the lead"></label></div><button class="x" data-act="delJob" data-id="${j.id}" title="Remove">×</button></div>`).join("")+`</div></details>`;
+    h+=`<details ${jobs.length<=8?"open":""}><summary class="small">Job list, trucks &amp; crew sizes</summary><div class="list">`+jobs.map(j=>`<div class="item"><input type="checkbox" data-act="jobOn" data-id="${j.id}" ${j.on?"checked":""} title="Include today"><div class="main" data-act="editJob" data-id="${j.id}" style="cursor:pointer"><div class="t">${j.time?`<span class="tag" style="margin:0 4px 0 0">${esc(j.time)}</span>`:""}${esc(j.name)}${j.multi?` <span class="small muted" style="font-weight:400">· ${esc(j.multi)}</span>`:""}</div><div class="s">${(j.requested||[]).length?`<span style="color:var(--accent)">Requested: ${esc(j.requested.map(id=>wById(id)?.name).filter(Boolean).join(", "))}</span><br>`:""}${(j.avoid||[]).length?`<span style="color:var(--bad)">Don't send: ${esc(j.avoid.map(id=>wById(id)?.name).filter(Boolean).join(", "))}</span><br>`:""}${j.aiNote?`<span>🤖 ${esc(j.aiNote)}</span><br>`:""}${esc(j.address||j.folder||"")}${hasLoc(j)?((locWarn(j,"job")?`<br><span style="color:var(--warn)">⚠ ${esc(locWarn(j,"job"))} — tap to fix</span>`:"")):` <span style="color:var(--bad)">· ${j.address||j.place?"location not found":"no location"}</span>`}</div></div><div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end"><label class="small muted">Trucks<input type="number" min="1" max="20" value="${jTrucks(j)}" data-act="jobTrucks" data-id="${j.id}" style="margin-left:4px;width:54px"></label><label class="small muted">Per truck<input type="number" min="1" max="20" value="${jPer(j)}" data-act="jobCrew" data-id="${j.id}" style="margin-left:4px;width:54px" title="People per truck, including the lead"></label></div><button class="x" data-act="delJob" data-id="${j.id}" title="Remove">×</button></div>`).join("")+`</div></details>`;
   }
   const b1=h;h=pre1;
   const oddN=jobs.filter(j=>locWarn(j,"job")).length;
   const onJobs=jobs.filter(j=>j.on);
   const sum1=jobs.length?`${onJobs.length} job${onJobs.length===1?"":"s"} · ${onJobs.reduce((n,j)=>n+jTrucks(j),0)} truck${onJobs.reduce((n,j)=>n+jTrucks(j),0)===1?"":"s"} · ${onJobs.reduce((n,j)=>n+jTrucks(j)*jPer(j),0)} people${noLoc.length+oddN?` · <span style="color:var(--warn)">⚠ ${noLoc.length+oddN} to fix</span>`:""}`:"";
-  h+=stepWrap(1,(dayWord()==="today"||dayWord()==="tomorrow"?`Load ${dayWord()}'s jobs`:`Load jobs for ${esc(dayWord())}`),sum1&&`<b>${esc(dLabel(scheduleDay(),{weekday:"long",month:"short",day:"numeric"}))}</b> · `+sum1,b1,!jobs.length||!tonight.assign||noLoc.length>0||oddN>0||!!editingJob);
+  h+=stepWrap(1,(dayWord()==="today"||dayWord()==="tomorrow"?`Load ${dayWord()}'s jobs`:`Load jobs for ${esc(dayWord())}`),sum1&&`<b>${esc(dLabel(scheduleDay(),{weekday:"long",month:"short",day:"numeric"}))}</b> · `+sum1,b1,!jobs.length||!tonight.assign||noLoc.length>0||oddN>0||!!editingJob||dayIsPast());
   // step 2
   const act=roster.workers.filter(w=>w.active!==false);const off=new Set(tonight.off);
   const pre2=h;h="";
@@ -1417,8 +1557,10 @@ function rResults(){
   let need=0,filled=0,tot=0,cnt=0,prob=0;
   let tNeed=0,tGo=0,anyEst=false;
   jobs.forEach(j=>{const c=asg[j.id];const T=jTrucks(j),P=jPer(j);const {trucks}=trucksFor(j,c);tNeed+=T;tGo+=trucks.filter(t=>t.lead&&!t.extra).length;need+=T*P;filled+=Math.min(c.length,T*P);trucks.forEach(t=>[t.lead,...t.crew].forEach(w=>{const g=w&&legFor(j,w,t);if(g){tot+=g.kind==="pickup"?0:g.min;cnt++;if(!g.real)anyEst=true}}));if(jobIssues(j,c).some(x=>x[0]!=="good"))prob++});
-  let h=`<div class="stats"><div class="stat"><b>${tGo}/${tNeed}</b><span>trucks with a lead</span></div><div class="stat"><b>${filled}/${need}</b><span>spots filled</span></div><div class="stat"><b>${cnt?(anyEst?"≈":"")+fmtDur(tot/cnt):"–"}</b><span>avg. drive each</span></div><div class="stat"><b>${free.length}</b><span>not assigned</span></div><div class="stat"><b>${prob}</b><span>jobs to check</span></div></div>`;
-  if(!prob)h+=`<div class="good">Every truck has a lead and a full crew, with no conflicts.</div>`;
+  let h=`<div class="stats"><div class="stat"><b>${tGo}/${tNeed}</b><span>trucks with a lead</span></div><div class="stat"><b>${filled}/${need}</b><span>spots filled</span></div><div class="stat"><b>${cnt?(anyEst?"≈":"")+fmtDur(tot/cnt):"–"}</b><span>avg. drive each</span></div><div class="stat"><b>${free.length}</b><span>not assigned</span></div><div class="stat"><b>${prob+skippedJobs().length}</b><span>jobs to check</span></div></div>`;
+  const sk=skippedJobs();
+  if(sk.length)h+=`<div class="bad"><b>⚠ ${sk.length} job${sk.length>1?"s are":" is"} NOT on this schedule:</b> ${sk.map(x=>`${esc(x.j.name)} (${esc(x.why)})`).join("; ")}. ${sk.some(x=>!hasLoc(x.j))?`Fix the location in step 1, then tap Rebuild.`:`Tap Rebuild to give ${sk.length>1?"them":"it"} a crew.`}</div>`;
+  if(!prob&&!sk.length)h+=`<div class="good">Every truck has a lead and a full crew, with no conflicts.</div>`;
   if(routeLastErr)h+=`<div class="warn">${esc(routeLastErr)}</div>`;
   else if(warmBusy)h+=`<div class="small muted" style="margin-top:6px">Getting road drive times…</div>`;
   if(anyEst)h+=`<div class="small muted" style="margin-top:6px">≈ = estimated (straight line at ${esc(S().avgMph)} mph). ${routeReady()?"Road times are on the way or unavailable for that spot.":`Add a free OpenRouteService key in <a href="#" data-act="goRoute">Settings → Road drive times</a> for real road times.`}</div>`;
@@ -1562,6 +1704,7 @@ function rSettings(){
 function rBackupCard(){
   return `<div class="card" id="backupCard"><h2>Backup &amp; restore</h2>
   <p class="muted small">Saves every crew lead and worker (names, addresses, locations, phones, lead status), the can't-work-together and work-well-together lists, your settings, saved map spots and all History. Restore it on another phone or computer, or into a newer version of this tool.</p>
+  ${(()=>{const b=backupInfo();return roster.workers.length?`<div class="${b.at&&!backupDue()?"good":"warn"}" style="margin-bottom:8px">${b.at?`Last backup: ${esc(tLabel(b.at))}`:"No backup saved from this device yet."}</div>`:""})()}
   <div class="row"><button class="b p" data-act="saveRoster" ${roster.workers.length?"":"disabled"}>Save backup file</button><button class="b" data-act="restoreRoster">Restore backup</button>${moreMenu([`<button class="b" data-act="copyRoster" ${roster.workers.length?"":"disabled"}>Copy backup as text</button>`,`<button class="b" data-act="workersCsv" ${roster.workers.length?"":"disabled"}>Export workers as spreadsheet (CSV)</button>`])}</div>
   ${roster.workers.length?`<p class="small muted" style="margin-bottom:0">Tip: save a backup whenever you add or change workers. Email it to yourself or keep it in Google Drive so it's never lost.</p>`:""}
   ${canDownloadApp()?`<h3>Use on a computer</h3><p class="small muted" style="margin-top:0">Save a copy of this app to open on a computer in Chrome, Edge or Firefox. The copy keeps its own workers and jobs: bring them over with Save backup file here, then Restore backup in the copy. iPhones can't run downloaded app files, so use the website there.</p>${rDownloadApp("rules")}`:""}</div>`;
@@ -1580,18 +1723,18 @@ function rDeleteCard(){
     <div class="item"><div class="main"><div class="t">Today's jobs &amp; crews</div><div class="s">Same as “Start new day”: clears jobs, crews and who's off. Keeps workers and rules.</div></div><button class="b small" data-act="delDay" ${tonight.jobs.length?"":"disabled"}>Clear</button></div>
     <div class="item"><div class="main"><div class="t">All workers &amp; crew rules</div><div class="s">Deletes every crew lead and worker, and the can't-work-together / work-well-together lists. Keeps settings and today's jobs.</div></div><button class="b small" data-act="delWorkers" style="color:var(--bad)" ${roster.workers.length?"":"disabled"}>Delete</button></div>
     <div class="item"><div class="main"><div class="t">History</div><div class="s">Every saved day and close-out. Workers, rules and today stay. A connected history file on a PC is emptied too.</div></div><button class="b small" data-act="delHistory" style="color:var(--bad)" ${HIST.size?"":"disabled"}>Delete</button></div>
-    <div class="item"><div class="main"><div class="t">Everything</div><div class="s">Workers, rules, settings, jobs, crews and history. The AI key stays (remove it in AI assistant).</div></div><button class="b small" data-act="wipe" style="color:var(--bad)">Delete</button></div>
+    <div class="item"><div class="main"><div class="t">Everything</div><div class="s">Workers, rules, settings, jobs, crews, history, saved map spots, remembered address lookups and drive times, the last calendar import and the support log. Only your keys stay (Claude, Gemini, road drive times): remove those under Connections above.</div></div><button class="b small" data-act="wipe" style="color:var(--bad)">Delete</button></div>
   </div></div>`;
 }
 function rHelp(){
   return `<details class="hsec" id="hEach"><summary>Each day: from calendar to schedule</summary><ol class="help">
   <li>After the jobs are posted at 9 p.m., go to <b>calendar.google.com</b> on a computer.</li>
   <li>Click the <b>⚙ gear</b> → <b>Settings</b>. On the left under “Settings for my calendars” (or “other calendars”), click the job calendar, then <b>Export calendar</b>. A .zip file downloads.</li>
-  <li>On the <b>Today</b> tab, tap <b>Open job file</b> and pick that .zip (or the .ics inside it). Choose the day — it starts on the day picked under “Scheduling for” (today unless you change it).</li>
+  <li>On the <b>Today</b> tab, tap <b>Open job file</b> and pick that .zip (or the .ics inside it). Choose the day — it starts on the day picked under “Scheduling for” (today, or tomorrow from 3 p.m. on, unless you change it). A job that runs several days, or repeats, shows up on every day it covers.</li>
   <li>The tool reads each event title — <code>7a-Lee Electric/Cameron Epps-Raeford, NC</code> becomes report time 7:00a, job “Lee Electric / Cameron Epps”, location Raeford, NC — and finds each town on the map. Headings like <code>***Fayetteville Schedule***</code> are skipped. If the title or event notes say how many trucks (e.g. <code>2 trucks</code>) or people (<code>3 man crew</code>), that's filled in too.</li>
   <li>Check <b>Trucks</b> and <b>Per truck</b> on each job, tap anyone who's off, then <b>Build crews</b>.</li>
   <li>Fix any yellow or red notes with the “Add / move” menus, then <b>Copy schedule</b> and send it out before 4 a.m.</li></ol>
-  <p class="small muted">The export includes every event on the calendar, past and future. That's fine: only the day you pick is loaded. If “Export calendar” isn't offered, the calendar's owner may need to give you “Make changes” access. In a pinch, tap <b>Paste instead</b> and type or paste the event titles, one per line.</p></details>
+  <p class="small muted">The export includes every event on the calendar, past and future. That's fine: only the day you pick is loaded. If “Export calendar” isn't offered, the calendar's owner may need to give you “Make changes” access. In a pinch, tap <b>More → Paste event titles instead</b> and type or paste the event titles, one per line.</p></details>
   <details class="hsec"><summary>Workers' home locations (one time)</summary>
   <p class="small">Add each worker with their home address and tap <b>Find from address</b>. It looks the address up on OpenStreetMap, which needs an internet connection. To add many at once, use <b>Import list</b> with a CSV that has the columns <code>Name, Address, Phone, Lead</code>; their locations are looked up automatically.</p>
   <p class="small">If a lookup lands in the wrong spot, long-press the house in Google Maps (phone) or right-click it (computer), copy the two numbers, and paste them into the worker's location box.</p></details>
@@ -1599,7 +1742,7 @@ function rHelp(){
   <p class="small"><b>Next morning:</b> open the day (the app reminds you) and mark each job ✅ Completed, 🌧 Rained out or ❌ Cancelled. Add a note or a crew change — sent home early, no-show, swapped in — so the record shows who actually worked.</p>
   <p class="small"><b>Looking something up:</b> use the calendar, or type a name, client or town in Search. Export any date range as a spreadsheet. On a PC in Chrome or Edge, <b>Connect a history file</b> once and it's updated automatically. History is kept forever and included in <b>Save backup file</b>.</p></details>
   <details class="hsec" id="relCard"><summary>What's new — release history</summary><p class="small muted" style="margin:0">Tap the version number at the top of any screen to see the latest changes.</p>${relHTML(CHANGELOG)}</details>
-  <details class="hsec"><summary>🤖 AI assistant (optional)</summary><p class="small">With a Claude API key saved under <b>Settings → AI assistant</b>: <b>Read job notes with AI</b> pulls trucks, crew size, requested and “don't send” people and important notes out of messy calendar text. After building crews, <b>Review with AI</b> looks for problems and better swaps — type anything special for today (who has to leave early, who to keep off a job) and it takes that into account. Each suggestion has an <b>Apply</b> button; applied people are locked 🔒 so a rebuild keeps them. Only names, jobs, distances and rules are sent — never addresses or phone numbers.</p></details>
+  <details class="hsec"><summary>🤖 AI assistant (optional)</summary><p class="small">With a Claude API key saved under <b>Settings → AI assistant</b>: <b>Read job notes with AI</b> pulls trucks, crew size, requested and “don't send” people and important notes out of messy calendar text. After building crews, <b>Review with AI</b> looks for problems and better swaps — type anything special for today (who has to leave early, who to keep off a job) and it takes that into account. Each suggestion has an <b>Apply</b> button; applied people are locked 🔒 so a rebuild keeps them. Worker names, the jobs (with job-site addresses and the calendar notes as written), drive times and rules are sent — never workers' home addresses or phone numbers.</p></details>
   <details class="hsec"><summary>How the matching works</summary><p class="small">Each crew lead drives the company truck from their home to the job, and the job's distance is measured from the lead's home. Workers join the truck along the way. If picking a worker up at home adds no more than ${esc(S().pickupMin)} minutes to the lead's drive (set in Settings), the lead picks them up. Otherwise the worker drives to a point on the lead's route and leaves their car there. So the tool pairs each worker with the lead whose route passes closest to their home, and fills lead spots first, then worker spots.</p>
   <p class="small"><b>Two leads on one truck:</b> only one drives. The app picks the lead that makes the least driving for the whole crew (for example, the lead who lives near the workers, so they can ride along). To choose yourself, tap <b>🚚 Make driver</b> next to that lead on the crew card; it stays when you rebuild (tap 🔒 to undo).</p>
   <p class="small"><b>Extra truck (optional):</b> with “let them bring their own truck” on in Settings, a spare lead on a job drives their own company truck as <b>Truck 2 (extra)</b> when they'd otherwise drive to the job alone, or when it saves the crew at least ${EXTRA_TRUCK_MIN} minutes of driving (for example, a worker who lives near them rides along instead of driving far). The crew size stays the same; workers go with whichever truck passes closest to them. At most one extra truck per job.</p>
@@ -1635,6 +1778,8 @@ function scheduleText(){
       });
     });
   });
+  const sk=skippedJobs();
+  if(sk.length)t+=`\n⚠ NOT SCHEDULED YET — no crew assigned:\n`+sk.map(x=>`  ${x.j.time?x.j.time+" · ":""}${x.j.name}${x.j.address?" — "+x.j.address:""} (${hasLoc(x.j)?"added late":"no map location"})\n`).join("");
   return t;
 }
 function scheduleCSV(){
@@ -1668,7 +1813,8 @@ async function download(name,data){
 }
 /* ---------- AI assistant (Claude API) ----------
    The API key is stored only in this browser (localStorage "crew_ai"). It is never saved in backups,
-   support packs, or the shared database. Home addresses, phone numbers and map coordinates are never sent. */
+   support packs, or the shared database. Workers' home addresses, phone numbers and map coordinates are never sent.
+   Job-site addresses and the calendar titles/notes (as written) are sent. */
 const AI_MODELS=[["claude-sonnet-5-5","Claude Sonnet 5.5 — best results (recommended)"],["claude-haiku-5-5","Claude Haiku 5.5 — fastest, cheapest"]];
 function aiCfg(){try{return JSON.parse(localStorage.getItem("crew_ai"))||{}}catch(e){return {}}}
 function aiSet(c){try{localStorage.setItem("crew_ai",JSON.stringify(c))}catch(e){}}
@@ -1821,7 +1967,7 @@ function rAIReview(){
     return h+`<p class="small muted" style="margin:0">Have Claude look over these crews and suggest fixes. Set it up in <a href="#" data-act="goAI">Settings → AI assistant</a>.</p></div>`;
   }
   h+=`<label class="f" style="margin-top:0">Anything special today? <span class="muted">(optional)</span></label><textarea id="aiInstr" placeholder="e.g. Dana has to leave by 2. Keep Carlos off NCDOT jobs. Ben's truck is in the shop.">${esc(r&&r.instructions||"")}</textarea>
-  <div class="row" style="margin-top:6px"><button class="b p" data-act="aiReview">${r?"Review again":"Review with AI"}</button><span class="small muted">Sends names, jobs, distances and rules — no addresses or phone numbers.</span></div>`;
+  <div class="row" style="margin-top:6px"><button class="b p" data-act="aiReview">${r?"Review again":"Review with AI"}</button><span class="small muted">Sends worker names, the jobs (with job-site addresses), drive times and rules — never home addresses or phone numbers.</span></div>`;
   if(r){
     if(r.stale)h+=`<div class="warn">Crews were rebuilt after this review — tap “Review again” for fresh suggestions.</div>`;
     h+=`<p class="small" style="margin-bottom:6px">${esc(r.summary)}</p>`;
@@ -1843,7 +1989,7 @@ function rAISettings(){
   <label class="f">Model</label><select id="aiModel">${AI_MODELS.map(([v,l])=>`<option value="${v}" ${(c.model||AI_MODELS[0][0])===v?"selected":""}>${esc(l)}</option>`).join("")}</select>
   <label class="row small" style="margin-top:10px"><input type="checkbox" id="aiAuto" ${c.autoNotes?"checked":""}> Read job notes with AI automatically after each calendar import</label>
   <div class="row" style="margin-top:10px"><button class="b p" data-act="aiSave">Save</button><button class="b" data-act="aiTest" ${c.key?"":"disabled"}>Test</button>${c.key?`<button class="b" data-act="aiRemove" style="color:var(--bad)">Remove key</button>`:""}</div>
-  <p class="small muted" style="margin-bottom:0">AI sends worker names, lead status, job titles/notes, distances and crew rules to Anthropic. Home addresses, phone numbers and map locations are never sent. AI features work on the website version (not on the shared Claude page).</p></div>`;
+  <p class="small muted" style="margin-bottom:0">AI sends worker names, lead status, job names and job-site addresses, the calendar titles and notes exactly as written, drive times and crew rules to Anthropic. Workers' home addresses, phone numbers and map locations are never sent. AI features work on the website version (not on the shared Claude page).</p></div>`;
 }
 /* ---------- Type a job in plain English (optional, off by default) ----------
    The dispatcher types something like "Smith mowing 412 Oak St Raeford, 7am, 2 trucks of 3, req Marcus, no Kevin"
@@ -2053,7 +2199,7 @@ async function histInit(){
 async function histPut(rec){
   HIST.set(rec.date,rec);
   if(histMode==="idb"){try{await IDB.put(rec)}catch(e){histMode="ls";logEvent("error","IndexedDB write failed: "+e.message)}}
-  if(histMode==="ls"){const o={};HIST.forEach((r,k)=>o[k]=r);lsSet("crew_history",o)}
+  if(histMode==="ls"){const o={};HIST.forEach((r,k)=>o[k]=r);lsSave("crew_history",o)}
   fileSync();
 }
 async function histClear(){
@@ -2079,7 +2225,13 @@ function snapshotJobs(){
 }
 const crewSig=jobs=>jobs.map(j=>j.key+":"+j.crews.map(t=>(t.lead?t.lead.name:"-")+"+"+t.workers.map(w=>w.name).sort().join(",")).join("/")).sort().join(";");
 const isDayKey=d=>typeof d==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(d);
-function scheduleDay(){return isDayKey(tonight.day)?tonight.day:((tonight.jobs.find(j=>j.day)||{}).day||dayKey(new Date()))}
+/* With nothing picked yet: today, or tomorrow from 3 p.m. on (jobs come in at night for the next day). */
+const EVENING_HOUR=15;
+function defaultDay(){const n=new Date();return n.getHours()>=EVENING_HOUR?tomorrowKey():dayKey(n)}
+function scheduleDay(){return isDayKey(tonight.day)?tonight.day:((tonight.jobs.find(j=>j.day)||{}).day||defaultDay())}
+/* Once work starts on a day (a job typed in, crews built) the day is pinned so it can't slide when the clock passes 3 p.m. or midnight. */
+function pinDay(){if(!isDayKey(tonight.day)){tonight.day=scheduleDay()}}
+const dayIsPast=()=>tonight.jobs.length>0&&scheduleDay()<dayKey(new Date());
 function tomorrowKey(){const t=new Date();t.setDate(t.getDate()+1);return dayKey(t)}
 /* "today" / "tomorrow" / "Sat, Nov 14" for the day being scheduled */
 function dayWord(d){d=d||scheduleDay();return d===dayKey(new Date())?"today":d===tomorrowKey()?"tomorrow":dLabel(d,{weekday:"short",month:"short",day:"numeric"})}
@@ -2099,6 +2251,7 @@ function rDayPicker(){
   return `<div class="dayPick"><span class="small"><b>Scheduling for</b></span>
     <button type="button" class="chip ${d===today?"on":""}" data-act="schedDay" data-d="${today}" title="${esc(sh(today))}">Today</button><button type="button" class="chip ${d===tmr?"on":""}" data-act="schedDay" data-d="${tmr}" title="${esc(sh(tmr))}">Tomorrow</button><label class="chip ${other?"on":""}" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px">${other?"":"Other"}<input type="date" id="schedDate" value="${other?d:""}" style="width:auto;padding:2px 4px;font-size:13px;border:0;background:transparent;color:inherit"></label>
     <span class="small muted" style="flex-basis:100%">${esc(dLabel(d,{weekday:"long",month:"long",day:"numeric"}))}</span></div>
+    ${dayIsPast()?`<div class="bad small"><b>⚠ These jobs are for ${esc(sh(d))}, which has already passed.</b> Starting a new schedule? Tap <button class="b small" data-act="newNight">Start new day</button> or pick the right day above. Otherwise it is sent with the old date and saved over that day in History.</div>`:""}
     ${mism.length?`<div class="warn small">${mism.length} job${mism.length>1?"s":""} came from the calendar for ${esc([...new Set(mism.map(j=>sh(j.day)))].join(", "))}, but you're scheduling for ${esc(sh(d))}. Pick the right day above, or tap Open job file to load that day's jobs.</div>`:""}`;
 }
 function histPeople(jb){return [...jb.crews.flatMap(t=>[t.lead&&t.lead.name,...t.workers.map(w=>w.name)]).filter(Boolean)]}
@@ -2336,7 +2489,7 @@ async function supportPack(){
   let ls=true;try{localStorage.setItem("crew_t","1");localStorage.removeItem("crew_t")}catch(e){ls=false}
   const env={appVersion:APP_VERSION,savedSpots:Object.keys(places).length,censusReachable:!censusDown,packedAt:now.toISOString(),timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,userAgent:navigator.userAgent,
     screen:`${screen.width}x${screen.height} @${devicePixelRatio}x`,where:location.protocol==="file:"?"local file":location.host||"claude page",
-    storage:dbOK?"Claude account":"this device",localStorage:ls,online:navigator.onLine,jszip:!!window.JSZip,
+    storage:dbOK?"Claude account":"this device",localStorage:ls,saveFailed,storagePersisted,lastBackup:backupInfo().at||null,storageChars:(()=>{try{return Object.fromEntries(Object.keys(localStorage).filter(k=>k.startsWith("crew_")).map(k=>[k,localStorage.getItem(k).length]))}catch(e){return null}})(),online:navigator.onLine,jszip:!!window.JSZip,
     aiConfigured:aiReady(),jobText:{on:jtOn(),engine:jtCfg().engine||"auto",gemini:!!jtCfg().geminiKey},routingConfigured:routeReady(),routeCached:Object.keys(RC).length,routeGeoms:Object.keys(RG).length,routeLastErr,aiModel:aiCfg().model||"",counts:{workers:roster.workers.length,leads:roster.workers.filter(w=>w.lead).length,jobs:tonight.jobs.length,jobsWithoutLocation:tonight.jobs.filter(j=>!hasLoc(j)).length,workersWithoutLocation:roster.workers.filter(w=>!hasLoc(w)).length,offToday:tonight.off.length,conflicts:roster.conflicts.length,prefers:roster.prefers.length,cachedLookups:Object.keys(geo).length}};
   const readme=`Crew Scheduler — support pack
 Made ${now.toLocaleString()} · app version ${APP_VERSION}
@@ -2474,10 +2627,10 @@ async function loadPackJobs(text,rosterText,source){
     const lat=num(j.lat),lng=num(j.lng),ok=lat!=null&&lng!=null&&Math.abs(lat)<=90&&Math.abs(lng)<=180;
     const req=ids(j.requested),av=ids(j.avoid);lostPeople+=(Array.isArray(j.requested)?j.requested.length:0)-req.length+(Array.isArray(j.avoid)?j.avoid.length:0)-av.length;
     return {id:str(j.id,40)||uid(),name:str(j.name,300)||"Job",title:str(j.title,500),time:str(j.time,20),day:str(j.day,20),address:str(j.address,300),place:str(j.place,200),
-      lat:ok?lat:null,lng:ok?lng:null,geoNote:str(j.geoNote,200),geoLabel:str(j.geoLabel,300),desc:str(j.desc,1500),folder:str(j.folder,200),
+      multi:str(j.multi,30),lat:ok?lat:null,lng:ok?lng:null,geoNote:str(j.geoNote,200),geoLabel:str(j.geoLabel,300),desc:str(j.desc,1500),folder:str(j.folder,200),
       crew:Math.max(1,Math.min(20,j.crew|0||S().defaultCrew)),trucks:Math.max(1,Math.min(20,j.trucks|0||1)),requested:req,avoid:av,aiNote:str(j.aiNote,500),on:j.on!==false};
   });
-  tonight.day=isDayKey(d.day)?d.day:undefined;tonight.off=ids(d.off);tonight.assign=null;tonight.locks={};tonight.meets={};delete tonight.aiReview;
+  tonight.day=isDayKey(d.day)?d.day:undefined;tonight.off=ids(d.off);tonight.offAt=new Date().toISOString();tonight.assign=null;tonight.locks={};tonight.meets={};delete tonight.aiReview;
   tonight.importedAt=new Date().toISOString();tonight.source=source;
   logEvent("import",`pack jobs from ${source}: ${tonight.jobs.length} jobs`);
   save("tonight");tab="tonight";render();
@@ -2554,11 +2707,13 @@ document.addEventListener("click",async e=>{
       const name=$("#jfName").value.trim()||"Job";const c=parseCoords($("#jfLoc").value);
       if($("#jfLoc").value.trim()&&!c){toast("Couldn't read that location — paste like 40.01, -82.98");return}
       const crew=Math.max(1,+$("#jfCrew").value||S().defaultCrew);const trucks=Math.max(1,+$("#jfTrucks").value||1);
-      const time=$("#jfTime").value.trim();const addr=$("#jfAddr").value.trim();
+      const time0=$("#jfTime").value.trim(),time=normTime(time0);const addr=$("#jfAddr").value.trim();
+      if(time0&&parseClock(time0)==null)toast(`Couldn't read the report time “${time0}” — type it like 7:00a or 12:30p to get leave-by times`);
+      else if(time0&&!/[ap]/i.test(time0))toast(`Report time read as ${time} — change it if that's wrong`);
       const requested=[...document.querySelectorAll("#jfReq .chip")].filter(c=>!c.classList.contains("off")).map(c=>c.dataset.id);
       let jid=editingJob;const hadLoc=editingJob!=="new"&&hasLoc(jById(editingJob)||{});
       const fg=c&&formGeo&&Math.abs(c.lat-formGeo.lat)<1e-5&&Math.abs(c.lng-formGeo.lng)<1e-5?formGeo:null;formGeo=null;
-      if(editingJob==="new"){jid=uid();tonight.jobs.push({id:jid,name,time,address:addr,lat:c?c.lat:null,lng:c?c.lng:null,geoNote:fg?fg.geoNote:(c?"Set by hand":""),geoLabel:fg?fg.geoLabel:"",desc:"",folder:"",crew,trucks,requested,on:true})}
+      if(editingJob==="new"){pinDay();jid=uid();tonight.jobs.push({id:jid,name,time,address:addr,lat:c?c.lat:null,lng:c?c.lng:null,geoNote:fg?fg.geoNote:(c?"Set by hand":""),geoLabel:fg?fg.geoLabel:"",desc:"",folder:"",crew,trucks,requested,on:true})}
       else{const j=jById(editingJob);const moved=!c||!hasLoc(j)||Math.abs(c.lat-j.lat)>1e-6||Math.abs(c.lng-j.lng)>1e-6;Object.assign(j,{name,time,address:addr,lat:c?c.lat:null,lng:c?c.lng:null,crew,trucks,requested});if(fg){j.geoNote=fg.geoNote;j.geoLabel=fg.geoLabel}else if(moved){j.geoNote=c?"Set by hand":"";j.geoLabel=""}}
       if(c&&!fg&&addr&&placeSave(addr,c.lat,c.lng,name))toast("Saved — this spot will be used next time for "+addr.split(",")[0]);
       if(!c&&addr&&hadLoc)placeForget(addr);   // location cleared on purpose: look it up fresh
@@ -2566,16 +2721,26 @@ document.addEventListener("click",async e=>{
       editingJob=null;save("tonight");render();
       if(!c&&addr)geocodeMissing("jobs",jid);
       break;}
-    case "jobOn":{const j=jById(id);j.on=el.checked;save("tonight");break;}
-    case "delJob":tonight.jobs=tonight.jobs.filter(j=>j.id!==id);if(tonight.assign)delete tonight.assign[id];for(const k in tonight.locks)if(tonight.locks[k]===id)delete tonight.locks[k];save("tonight");render();break;
+    case "jobOn":{const j=jById(id);if(!j)break;j.on=el.checked;
+      if(!j.on&&tonight.assign&&tonight.assign[id]){const n=tonight.assign[id].length;delete tonight.assign[id];for(const k in tonight.locks)if(tonight.locks[k]===id)delete tonight.locks[k];
+        toast(`${j.name} is off the schedule${n?` — its ${n} ${n>1?"people are":"person is"} free (tap Rebuild to use them)`:""}`)}
+      save("tonight");render();break;}
+    case "delJob":{const i=tonight.jobs.findIndex(j=>j.id===id);if(i<0)break;
+      const j=tonight.jobs[i],crew=tonight.assign&&tonight.assign[id],lk=Object.keys(tonight.locks).filter(k=>tonight.locks[k]===id);
+      tonight.jobs.splice(i,1);if(tonight.assign)delete tonight.assign[id];lk.forEach(k=>delete tonight.locks[k]);save("tonight");render();
+      toast(`Removed ${j.name}`,{ms:9000,action:"Undo",fn:()=>{if(jById(id))return;
+        tonight.jobs.splice(Math.min(i,tonight.jobs.length),0,j);
+        if(crew&&tonight.assign){const used=assignedIds();tonight.assign[id]=crew.filter(w=>wById(w)&&!used.has(w)&&!tonight.off.includes(w))}
+        lk.forEach(k=>{if(!tonight.locks[k]&&wById(k))tonight.locks[k]=id});save("tonight");render();toast(`${j.name} is back`)}});
+      break;}
     case "newNight":if(await ask("Clear today's jobs, crews and who's-off list? Workers and crew rules stay.","Start new day")){tonight={jobs:[],assign:null,locks:{},off:[],importedAt:null,source:""};todayOpen={};save("tonight");render()}break;
-    case "toggleOff":{const s=new Set(tonight.off);s.has(id)?s.delete(id):s.add(id);tonight.off=[...s];
+    case "toggleOff":{const s=new Set(tonight.off);s.has(id)?s.delete(id):s.add(id);tonight.off=[...s];tonight.offAt=new Date().toISOString();
       if(s.has(id)){delete tonight.locks[id];if(tonight.assign)for(const k in tonight.assign)tonight.assign[k]=tonight.assign[k].filter(x=>x!==id)}
       save("tonight");render();break;}
     case "allOn":tonight.off=[];save("tonight");render();break;
     case "solve":{el.disabled=true;
       if(routeReady()){el.textContent="Getting road drive times…";await warmBeforeSolve()}
-      el.textContent="Working…";setTimeout(()=>{todayOpen={};solve();render();$("#step3")?.scrollIntoView({block:"start"});scheduleWarm()},20);break;}
+      el.textContent="Working…";setTimeout(()=>{todayOpen={};pinDay();solve();render();$("#step3")?.scrollIntoView({block:"start"});scheduleWarm()},20);break;}
     case "goRoute":goSettings("routeCard");break;
     case "routeSave":{const k=$("#routeKey").value.trim();if(!k){toast("Paste the key first");return}routeSetCfg({key:k});routePauseUntil=0;routeLastErr="";routeMiss.clear();logEvent("route-setup","saved key");render();toast("Road drive times turned on — rebuild crews to use them");break;}
     case "routeRemove":if(await ask("Remove the OpenRouteService key from this device? Times will be estimated.","Remove")){routeSetCfg({});render();toast("Key removed")}break;
@@ -2591,13 +2756,18 @@ document.addEventListener("click",async e=>{
     case "delWorkers":{
       const n=roster.workers.length;
       const r=await ask(`Delete all ${n} worker${n===1?"":"s"} and crew rules? This can't be undone. Save a backup first if you might want them back.`,"Delete workers","Save backup first");
-      if(r===false){download(`crew-roster-${new Date().toISOString().slice(0,10)}.json`,rosterBackup());break}
+      if(r===false){await download(`crew-roster-${new Date().toISOString().slice(0,10)}.json`,rosterBackup());markBackedUp();break}
       if(!r)break;
       roster.workers=[];roster.conflicts=[];roster.prefers=[];
       tonight.assign=null;tonight.locks={};tonight.meets={};tonight.off=[];delete tonight.aiReview;
       tonight.jobs.forEach(j=>{j.requested=[];j.avoid=[]});
       editingWorker=null;logEvent("delete","workers");save("roster");save("tonight");render();toast("All workers and crew rules deleted");break;}
-    case "copy":copyText(scheduleText());saveDayToHistory(true);break;
+    case "copy":{
+      if(dayIsPast()){const nd=defaultDay();
+        const r=await ask(`This schedule is dated ${dLabel(scheduleDay(),{weekday:"long",month:"short",day:"numeric"})}, which has already passed. Copying it also saves it over that day in History.`,"Copy anyway",`Change to ${dayWord(nd)}`);
+        if(r===null)break;if(r===false)setScheduleDay(nd)}
+      const nsk=skippedJobs().length;
+      await copyText(scheduleText(),nsk?`Copied — but ${nsk} job${nsk>1?"s are":" is"} NOT on it (see the red note)`:undefined);saveDayToHistory(true);break;}
     case "csv":download("crews-"+new Date().toISOString().slice(0,10)+".csv",scheduleCSV());saveDayToHistory(true);break;
     case "saveHist":saveDayToHistory(false);break;
     case "histOpen":{histSel=el.dataset.d;histMonth=histSel.slice(0,7);tab="history";render();setTimeout(()=>$("#histDay")?.scrollIntoView({block:"start"}),0);break;}
@@ -2678,11 +2848,15 @@ document.addEventListener("click",async e=>{
     case "aiReview":{const ins=($("#aiInstr")?.value||"").trim();el.disabled=true;el.textContent="🤖 Reviewing…";try{await aiReview(ins)}catch(e){toast(e.message);el.disabled=false;el.textContent="Review with AI"}break;}
     case "aiApply":applySuggestion(+el.dataset.i);break;
     case "supportPack":{el.disabled=true;const tx=el.textContent;el.textContent="Packing…";try{await supportPack()}finally{el.disabled=false;el.textContent=tx}break;}
-    case "saveRoster":download(`crew-roster-${new Date().toISOString().slice(0,10)}.json`,rosterBackup());break;
-    case "copyRoster":copyText(rosterBackup(),"Backup copied — paste it into an email or note to yourself");break;
+    case "saveRoster":await download(`crew-roster-${new Date().toISOString().slice(0,10)}.json`,rosterBackup());markBackedUp();render();break;
+    case "copyRoster":await copyText(rosterBackup(),"Backup copied — paste it into an email or note to yourself");markBackedUp();render();break;
+    case "backupLater":{const b=backupInfo();b.snooze=Date.now()+2*864e5;lsSet("crew_backup",b);render();break;}
     case "restoreRoster":restoreDialog();break;
     case "workersCsv":download(`crew-workers-${new Date().toISOString().slice(0,10)}.csv`,workersCSV());break;
-    case "wipe":if(await ask("Delete everything — workers, rules, settings, jobs, crews and history? This can't be undone.","Delete everything")){logEvent("delete","everything");await histClear();roster={workers:[],conflicts:[],prefers:[],settings:{...DEFAULT_SETTINGS}};tonight={jobs:[],assign:null,locks:{},off:[],importedAt:null,source:""};save("roster");save("tonight");render()}break;
+    case "wipe":if(await ask("Delete everything — workers, rules, settings, jobs, crews, history and saved map spots? This can't be undone.","Delete everything")){await histClear();roster={workers:[],conflicts:[],prefers:[],settings:{...DEFAULT_SETTINGS}};tonight={jobs:[],assign:null,locks:{},off:[],importedAt:null,source:""};
+      for(const o of [places,geoCache,RC,RG])for(const k in o)delete o[k];routeMiss.clear();LOG.length=0;todayOpen={};
+      ["crew_places","crew_geo","crew_rc","crew_rg","crew_lastimport","crew_log","crew_backup","crew_history"].forEach(k=>{try{localStorage.removeItem(k)}catch(e){}});
+      logEvent("delete","everything");save("roster");save("tonight");render();toast("Everything deleted. Your keys are still saved under Settings → Connections.")}break;
   }
 });
 document.addEventListener("input",e=>{
