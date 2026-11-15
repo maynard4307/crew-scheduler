@@ -215,6 +215,27 @@ END:VCALENDAR`;
   ok(await p3.evaluate(()=>roster.workers.length)===16,'backup opened with Import list is restored, not read as a list');
   ok(p2.errs.length+p3.errs.length===0,'no script errors (restore)',[p2.errs,p3.errs]);
 
+  // ---------- 15. temp agency: short-handed note when off, Temp worker placeholders when on ----------
+  p=await open();await closeModalIfAny(p);await p.click('[data-act=sample]');
+  r=await p.evaluate(()=>{tonight.off=roster.workers.filter(w=>!w.lead).slice(0,3).map(w=>w.id);todayOpen[2]=true;solve();render();
+    return {step2:document.querySelector('#step2').innerText,warn:[...document.querySelectorAll('#step3 .warn')].map(e=>e.innerText).join('|'),txt:scheduleText(),short:shortList().reduce((a,x)=>a+x.n,0),asg:Object.values(tonight.assign).flat().length}});
+  ok(/short 3 workers/.test(r.step2),'step 2 counts the workers short before building',r.step2);
+  ok(r.short===3&&/Short 3 workers[\s\S]*Turn on Temp agency/.test(r.warn),'setting off: crews say how many workers are short and suggest turning it on',r.warn);
+  ok(/SHORT-HANDED/.test(r.txt)&&!/Temp worker/.test(r.txt),'setting off: copied schedule lists short-handed jobs, no temps');
+  r=await p.evaluate(()=>{roster.settings.tempAgency=true;roster.settings.agencies=[{id:"a1",name:"Labor Plus",phone:"910-555-0100",address:"Fayetteville, NC",lat:35.05,lng:-78.88},{id:"a2",name:"Sanford Staffing",phone:"919-555-0111",address:"Sanford, NC",lat:35.48,lng:-79.18}];render();
+    const sanfordJob=tonight.jobs.find(j=>/Pittsboro|Sanford/.test(j.address)),fayJob=tonight.jobs.find(j=>/Raeford|Fayetteville/.test(j.address));
+    return {ph:[...document.querySelectorAll('#step3 .mem')].filter(e=>/Temp worker/.test(e.innerText)).length,txt:scheduleText(),csv:scheduleCSV().split('\n').filter(l=>/"Temp"/.test(l)).length,
+      near1:agencyFor(sanfordJob).a.id,near2:agencyFor(fayJob).a.id,asg:Object.values(tonight.assign).flat().every(id=>wById(id)),leads:tonight.jobs.every(j=>trucksFor(j,tonight.assign[j.id]).trucks.every(t=>!t.lead||t.lead.lead)),hist:snapshotJobs().reduce((a,j)=>a+(j.temps?j.temps.n:0),0)}});
+  ok(r.ph===3&&r.csv===3&&/TEMP WORKERS NEEDED — 3/.test(r.txt),'setting on: 3 Temp worker placeholders on crews, schedule and CSV',r);
+  ok(r.near1==="a2"&&r.near2==="a1",'closest agency is suggested for each job',r);
+  ok(r.asg===true&&r.leads&&r.hist===3,'temps never enter the real crews; History records them',r);
+  r=await p.evaluate(()=>{roster.settings.agencies=[];render();return {ph:document.querySelectorAll('#step3 .mem').length,warn:[...document.querySelectorAll('#step3 .warn')].map(e=>e.innerText).join('|')}});
+  ok(/Add a temp agency/.test(r.warn),'setting on with no agency: asks to add one',r.warn);
+  const bak2=await p.evaluate(()=>{roster.settings.agencies=[{id:"a1",name:"Labor Plus",phone:"910",address:"x",lat:35,lng:-79}];return rosterBackup()});
+  const p4=await open();await closeModalIfAny(p4);await p4.evaluate(t=>restoreRoster(t),bak2);await p4.waitForTimeout(300);
+  ok(await p4.evaluate(()=>S().tempAgency===true&&S().agencies.length===1&&S().agencies[0].name==="Labor Plus"),'temp agencies come back with a backup');
+  ok(p.errs.length+p4.errs.length===0,'no script errors (temp agency)',[p.errs,p4.errs]);
+
   // ---------- 14. version and What's new are in step ----------
   r=await p.evaluate(()=>({v:APP_VERSION,top:CHANGELOG[0].v,shown:document.querySelector('#appVer').textContent}));
   ok(r.v===r.top&&r.shown==="v"+r.v,'APP_VERSION matches the newest What\'s new entry',r);

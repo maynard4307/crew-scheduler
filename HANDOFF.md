@@ -4,7 +4,7 @@
 
 - Live app: https://maynard4307.github.io/crew-scheduler/
 - Repository: https://github.com/maynard4307/crew-scheduler (public; GitHub Pages from `main`, root)
-- Current version: **2026.11.14-a** (shown in the app's top bar; tap it for What's new)
+- Current version: **2026.11.15-a** (shown in the app's top bar; tap it for What's new)
 - Owner: maynard4307 · Primary user: the owner's brother (dispatcher, iPhone + PC)
 
 ## 1. What it's for
@@ -27,7 +27,7 @@ Tabs: **Today · Workers · History · ⚙ Settings** (since 2026.11.11-a; befor
 - **Workers**: people, plus Can't work together / Work well together (shown in each worker's profile too).
 - **History**: unchanged.
 - **Header**: Phoenix Spirit Group (PSG) square logo left of the title, embedded as a data-URI PNG (`.brand`, on a white tile so it reads in dark mode); the same logo is the favicon / apple-touch-icon. Chosen over the wide "Phoenix Spirit Group / A Helix Company" logo because it stays legible at 34–40 px.
-- **⚙ Settings**: Scheduling rules (numbers, checkboxes) → Connections (Road drive times key, AI key, Type jobs in plain English) → Backup & restore (+ download app) → Help & updates (how-to topics, What's new, support pack) → Delete data. Jump chips at the top.
+- **⚙ Settings**: Scheduling rules (numbers, checkboxes) → Temp agency (switch + agency list) → Connections (Road drive times key, AI key, Type jobs in plain English) → Backup & restore (+ download app) → Help & updates (how-to topics, What's new, support pack) → Delete data. Jump chips at the top.
 - Per-job and per-lead settings stay on the job / worker form.
 - **Plain-English job entry** (off by default, Settings → Type jobs in plain English): when on, + Add a job / Edit job shows a “Type the job in plain English” box and **Fill in the form** button above the fields.
 
@@ -46,6 +46,7 @@ Tabs: **Today · Workers · History · ⚙ Settings** (since 2026.11.11-a; befor
 - Leave-by times: work backward from the job's report time — arrive `arriveEarly` min early (default 15), allow `stopMinutes` per pickup/meet stop (default 5). Leave times round down to 5 minutes.
 - Meet spots: suggest **Park & Ride** first, then public free lots; store/gas lots (Walmart, Food Lion…) only if the user turns that option on, always with a towing warning.
 - **Nothing is left off quietly.** A ticked job that has no crew (no map location, or added after crews were built) is listed in red on the crews and at the end of the copied schedule as “NOT SCHEDULED YET”. A save that fails shows “NOT SAVED”; the app never shows “Saved” for something that wasn't.
+- **Temp agency** (setting `tempAgency`, default off; agencies in `settings.agencies`: name, phone, address, note, map spot). Temps **only fill worker spots, never crew lead** (a lead has the company truck). Off: step 2 counts worker spots vs. available people, crews say "Needs N more workers", a banner lists the short jobs and offers to turn the setting on, the copied schedule ends with "SHORT-HANDED". On (with at least one agency): open worker spots show as **Temp worker** placeholders (crews, copied schedule, CSV) that meet the crew at the job by report time − `arriveEarly`; the **closest agency** to each job (by `travel`) is suggested; a banner and a "TEMP WORKERS NEEDED" list say whom to call for how many. Placeholders never enter `tonight.assign` and the solver ignores them. Agreed with the owner Nov 15, 2026.
 - **AI never decides crews or drivers.** Plain-English job entry only fills the job form; the dispatcher checks it and taps Save. Review with AI only suggests moves the dispatcher applies by hand.
 - Close-out happens **the next morning**. Statuses: Completed, Rained out, Cancelled (no "Partial"). **History is kept forever.**
 - Calendar titles look like `7a-Lee Electric/Cameron Epps-Raeford, NC, Hoke County` → time · client / contact · town. Headings like `***Fayetteville Schedule***` are skipped.
@@ -59,7 +60,7 @@ Tabs: **Today · Workers · History · ⚙ Settings** (since 2026.11.11-a; befor
 
 | Key / store | What | In backups? |
 |---|---|---|
-| localStorage `crew_roster` | workers, conflicts, prefers, settings | Yes |
+| localStorage `crew_roster` | workers, conflicts, prefers, settings (incl. temp agencies) | Yes |
 | localStorage `crew_tonight` | `day` (the day being scheduled, YYYY-MM-DD; set by Scheduling for, by loading a calendar day, or pinned by `pinDay` when a job is typed in or crews are built), `offAt` (when the off list was last touched), today's jobs, assignments, locks, off list, meets, `drivers` (Make driver: worker id → job id, counts only while locked to that job — `isDriver`), AI review, `histSaved` | No (support pack only) |
 | IndexedDB `crew-scheduler` → `days` | History, one record per date (names copied in) | Yes (merged on restore, newer edit wins) |
 | IndexedDB `kv.histFile` | PC history-file handle (File System Access) | No |
@@ -94,6 +95,7 @@ On the Claude artifact the roster/today also sync through the artifact database 
 - Per-truck view: `trucksFor` (also the optional extra truck: compares crew minutes with T vs T+1 trucks via `legFor`; `truckLabel`), `legFor` (lead / pickup / meet / atlead / atjob / job), `planTruck` (leave-by timeline), `jobIssues`
 - Layout: `render` (tabs `tonight`/`workers`/`history`/`settings`), `rTonight` with `stepWrap` (collapsible steps, `todayOpen` overrides, reset on build/new day), `moreMenu`, `rActionBar` (bottom bar), `goSettings(cardId, openId)` for links into Settings; Settings = `rSettings` → `rRouteSettings`, `rAISettings`, `rBackupCard`, `rHelpCard` (wraps `rHelp` sections as `<details>`), `rDeleteCard`; pair lists `rPairs` on Workers
 - Day being scheduled: `scheduleDay()` = `tonight.day` → first job's calendar day → `defaultDay()` (today; tomorrow from `EVENING_HOUR` = 15:00). `pinDay()` fixes it once a job is typed or crews are built. `dayIsPast()` drives the red warning in `rDayPicker` and the confirm on Copy schedule. `rDayPicker`, `setScheduleDay`, `dayWord`. Used by the copied schedule, History save, step titles. Hand-added jobs have no `day` of their own; they follow `tonight.day`. Cleared by Start new day; a past `day` with no jobs resets to today.
+- Temp agency: `agencyList`, `tempsOn` (setting on and ≥ 1 agency), `agencyFor` (closest agency with a map spot, else the first), `openSpots` (open worker spots per truck, same count as jobIssues' "Needs N more workers"), `tempArrive`, `shortList`, `tempBanner` (crews), `rTempSettings` / `agencyLocate` (Settings card, geocodes the agency address), actions `goTemp` / `agAdd` / `agDel`, inputs `data-agf`. History jobs carry `temps:{n,agency}` when temps were planned.
 - Output: `rResults`, `scheduleText`, `scheduleCSV`, `rMap`; `skippedJobs()` (ticked jobs with no crew entry) feeds the red note and the “NOT SCHEDULED YET” list
 - Saving: `save` → `lsSave` (on a failed write `freeSpace()` drops the lookup / drive-time / import / log caches and retries; still failing sets `saveFailed` → “NOT SAVED” in the top bar and `saveFailBanner` on every tab). `navigator.storage.persist()` is requested at start when there are workers. Backup reminder: `backupDue` / `backupBanner` / `markBackedUp` (`BACKUP_DAYS` = 7, skipped for sample data and under 3 workers). Messages: `toast(msg,{action,fn,ms})` stacks up to 3, stays longer for long text, tap to dismiss; used for Undo on job delete.
 - Report times: `parseClock` reads “7:00a”, “630a”, and a/p-less “7”, “7:00”, “0700”, “15:30” (24-hour reading); `normTime` tidies on Save job; unreadable times are flagged in `jobIssues`.
@@ -159,4 +161,5 @@ Never commit backups, support packs, CSVs or keys (`.gitignore` blocks `*.json`,
 | Nov 11, 2026 | Optional extra truck for a spare lead (off by default): only when they'd drive alone anyway or it saves ≥ 10 min; max one per job; crew size unchanged |
 | Nov 11, 2026 | Plain-English job entry (off by default): AI only fills the Add a job form for review, never changes crews or drivers. Free first: Chrome built-in AI, then a free Gemini key, then the existing Claude key; basic offline reader always as the fallback. Only the typed sentence is sent; the roster is matched on the device |
 | Nov 14, 2026 | Full review, then a safety release (2026.11.14-a): failed saves are loud, backup reminder, skipped jobs shown on the schedule, past-date warning, unticked jobs come off at once. Multi-day and repeating calendar events load on every day they cover (owner's call until the dispatcher confirms how the calendar is used). "Scheduling for" starts on Tomorrow from 3 p.m. AI wording corrected: job-site addresses and calendar notes are sent, home addresses and phones never. Release checks saved in `tests/checks.js` |
+| Nov 15, 2026 | Temp agency option (off by default): several agencies, closest one suggested; temps only fill worker spots, never lead. Off = a note saying how many workers are short; on = Temp worker placeholders on the crews and schedule |
 | Nov 12, 2026 | "Scheduling for" day choice (Today / Tomorrow / date) on Today, so hand-typed jobs can be scheduled for the next day; schedule and History use it |

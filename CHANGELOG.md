@@ -2,6 +2,14 @@
 
 Tap the version number at the top of the app to see this inside Crew Scheduler.
 
+## 2026.11.15-a — Nov 15, 2026
+
+**New**
+- New Temp agency setting (Settings → Temp agency). Add one or more temp agencies with their name, phone, address and a note. Off until you turn it on.
+- When there aren't enough workers, the app now says so: step 2 shows how many worker spots there are to fill and how many people are available, and after Build crews a note lists how many workers each job is short. The copied schedule ends with a “SHORT-HANDED” list. If the temp agency setting is off, it offers to turn it on.
+- With the temp agency setting on, open worker spots show as “Temp worker” on the crews, the copied schedule and the CSV, meeting the crew at the job before report time. The app suggests the agency closest to each job and lists who to call and how many temps for which job. Temps only fill worker spots: every truck still needs one of your crew leads.
+- History notes how many temp workers a job used and from which agency.
+
 ## 2026.11.14-a — Nov 14, 2026
 
 **New**

@@ -143,9 +143,10 @@ details.hsec>summary{font-weight:600;cursor:pointer;padding:4px 0}
 <script>
 "use strict";
 /* ---------- state ---------- */
-const APP_VERSION="2026.11.14-a";
+const APP_VERSION="2026.11.15-a";
 /* Release notes — newest first. Add an entry here with every update. */
 const CHANGELOG=[
+ {v:"2026.11.15-a",date:"Nov 15, 2026",added:["New Temp agency setting (Settings → Temp agency). Add one or more temp agencies with their name, phone, address and a note. Off until you turn it on.","When there aren't enough workers, the app now says so: step 2 shows how many worker spots there are to fill and how many people are available, and after Build crews a note lists how many workers each job is short. The copied schedule ends with a “SHORT-HANDED” list. If the temp agency setting is off, it offers to turn it on.","With the temp agency setting on, open worker spots show as “Temp worker” on the crews, the copied schedule and the CSV, meeting the crew at the job before report time. The app suggests the agency closest to each job and lists who to call and how many temps for which job. Temps only fill worker spots: every truck still needs one of your crew leads.","History notes how many temp workers a job used and from which agency."]},
  {v:"2026.11.14-a",date:"Nov 14, 2026",added:["Backup reminder: if your workers haven't been backed up in a week, Today shows a reminder with a Save backup file button. Settings → Backup & restore shows when the last backup was made.","A job that runs several days on the calendar (one event from Monday to Friday), or one that repeats, now shows up on every day it covers when you open the job file. It's marked “day 2 of 5” or “repeats” in the job list.","From 3 p.m. on, “Scheduling for” starts on Tomorrow, since the next day's jobs come in at night. Tap Today if you mean today.","Removing a job with × now shows an Undo button for a few seconds.","Messages at the bottom of the screen stay up longer when they're long, and you can tap one to dismiss it."],fixed:["If the phone or browser ran out of storage space, changes could fail to save while the top still said “Saved”. The app now clears out old remembered lookups to make room by itself, and if a save still fails it shows a red “NOT SAVED” warning telling you to save a backup file.","A job with no map location was left off the crews and the copied schedule without a word, and the screen still said every truck was covered. Now a red note lists any job that isn't on the schedule, and the copied schedule ends with a “NOT SCHEDULED YET” list.","If yesterday's jobs were still loaded and you typed in new ones, the schedule went out with yesterday's date and was saved over yesterday in History. Now a red note warns when the day has already passed, with a Start new day button, and Copy schedule asks before using an old date.","Unticking a job after crews were built left it in the crews and in the copied schedule until you rebuilt. Now it comes off right away and its people are free.","When you load a new day's jobs, the app asks whether to keep the people who were marked off before, so nobody stays off by accident.","A report time typed without a or p (like 7:00 or 0700) gave no leave-by times. It's now read as a morning time (7:00a) and tidied when you save, and a time that can't be read is flagged on the job.","“Delete everything” now also clears saved map spots, remembered address lookups and drive times, the last calendar import and the support log. Only your keys stay, and the screen says so.","The AI notes said no addresses are sent. To be exact: job-site addresses and the calendar notes are sent to the AI when you use it; workers' home addresses and phone numbers never are. The wording now says that."]},
  {v:"2026.11.12-a",date:"Nov 12, 2026",added:["New “Scheduling for” choice at the top of step 1 on Today: tap Today or Tomorrow, or pick any date. Jobs you add by hand go on that day, and the copied schedule and History use that date. Step 1 and 2 titles say which day you're working on.","When you open a job file, the day list starts on the day you picked, and loading a day's jobs sets “Scheduling for” to match. If loaded calendar jobs are for a different day than the one picked, a note says so."]},
  {v:"2026.11.11-d",date:"Nov 11, 2026",added:["New option: type a job in plain English. Turn it on in Settings → Type jobs in plain English, then tap + Add a job and type something like “Smith mowing, 412 Oak St Raeford, 7am, 2 trucks of 3, req Marcus, no Kevin”. Tap Fill in the form and it fills in the name, time, address, trucks, crew size and who's requested, for you to check before you Save. It only fills the form: who goes where and who drives is still up to your scheduling rules.","It uses free AI first: the AI built into newer Chrome on a PC (stays on your computer), or Google Gemini with a free key you paste in Settings. With no AI or no internet, a basic reader still picks out the time, trucks, crew size and names. Only the sentence you type is sent, never your worker list or addresses. Off until you turn it on."]},
@@ -180,7 +181,7 @@ function logEvent(type,msg,extra){
 window.addEventListener("error",e=>logEvent("error",e.message,{src:(e.filename||"").split("/").pop(),line:e.lineno,col:e.colno,stack:e.error&&e.error.stack?String(e.error.stack).slice(0,800):""}));
 window.addEventListener("unhandledrejection",e=>logEvent("error","Unhandled: "+(e.reason&&e.reason.message||e.reason),{stack:e.reason&&e.reason.stack?String(e.reason.stack).slice(0,800):""}));
 logEvent("open","App opened",{version:APP_VERSION});
-const DEFAULT_SETTINGS={defaultCrew:2,maxMiles:0,maxLeadMiles:0,roadFactor:1.25,leadsAsHelpers:true,extraTruck:false,pickupMiles:2,pickupMin:10,allowStores:false,arriveEarly:15,stopMinutes:5,avgMph:40};
+const DEFAULT_SETTINGS={defaultCrew:2,maxMiles:0,maxLeadMiles:0,roadFactor:1.25,leadsAsHelpers:true,extraTruck:false,tempAgency:false,pickupMiles:2,pickupMin:10,allowStores:false,arriveEarly:15,stopMinutes:5,avgMph:40};
 /* A lead's own limit (set on the lead) wins over the default. 0 = no limit. */
 const leadLimit=w=>{const own=+(w&&w.maxMiles)||0;return own>0?own:(+S().maxLeadMiles||0)};
 let roster={workers:[],conflicts:[],prefers:[],settings:{...DEFAULT_SETTINGS}};
@@ -238,6 +239,8 @@ function normalize(){
   if(roster.settings&&roster.settings.maxLeadMiles===undefined)roster.settings.maxLeadMiles=roster.settings.maxMiles||0;
   roster.settings={...DEFAULT_SETTINGS,...(roster.settings||{})};
   delete roster.settings.requireLead;
+  roster.settings.agencies=(Array.isArray(roster.settings.agencies)?roster.settings.agencies:[]).filter(a=>a&&typeof a==="object").map(a=>({id:String(a.id||uid()),name:String(a.name||"").slice(0,80),address:String(a.address||"").slice(0,200),phone:String(a.phone||"").slice(0,40),note:String(a.note||"").slice(0,200),
+    lat:typeof a.lat==="number"&&Math.abs(a.lat)<=90?a.lat:null,lng:typeof a.lng==="number"&&Math.abs(a.lng)<=180?a.lng:null,geoLabel:String(a.geoLabel||"").slice(0,300)}));
   tonight.jobs=tonight.jobs||[];tonight.jobs.forEach(j=>{if(!j.trucks)j.trucks=1});tonight.locks=tonight.locks||{};tonight.off=tonight.off||[];tonight.drivers=tonight.drivers||{};
 }
 function save(which){
@@ -1330,6 +1333,32 @@ function legText(g,pp){
 }
 const gmap=(lat,lng)=>`https://www.google.com/maps/search/?api=1&query=${lat.toFixed(5)},${lng.toFixed(5)}`;
 const gmapParkRide=(lat,lng)=>`https://www.google.com/maps/search/park+and+ride/@${lat.toFixed(5)},${lng.toFixed(5)},12z`;
+/* ---------- Temp agency (setting `tempAgency`, agencies in settings.agencies) ----------
+   Temps only fill worker spots, never crew lead (a lead has the company truck). Off: the app says how many
+   workers a job is short and suggests turning the setting on. On: open worker spots become "Temp worker"
+   placeholders (not real people: they never enter tonight.assign), with the closest agency to call. */
+const agencyList=()=>(S().agencies||[]).filter(a=>a&&(a.name||a.address||a.phone));
+const tempsOn=()=>!!S().tempAgency&&agencyList().length>0;
+const agName=a=>a&&a.name||"the temp agency";
+function agencyFor(j){
+  const as=agencyList();if(!as.length)return null;
+  const wl=hasLoc(j)?as.filter(hasLoc):[];
+  if(!wl.length)return {a:as[0],mi:null};
+  let best=null;for(const a of wl){const d=travel(a,j).mi;if(!best||d<best.mi)best={a,mi:d}}
+  return best;
+}
+const agLine=g=>g?`${agName(g.a)}${g.a.phone?" "+g.a.phone:""}${g.mi!=null?` (~${fmtMi(g.mi)} mi from the job)`:""}`:"the temp agency";
+/* Open worker spots on a job, per truck (an extra truck's lead counts as a worker, like jobIssues). */
+function openSpots(j,crew,tk){
+  const P=jPer(j);tk=tk||trucksFor(j,crew||[]);
+  const helpers=tk.trucks.reduce((n,t)=>n+t.crew.length+(t.extra?1:0),0);
+  let left=Math.max(0,jTrucks(j)*(P-1)-helpers);
+  const per=tk.trucks.map(t=>{if(t.extra)return 0;const k=Math.min(left,Math.max(0,P-1-t.crew.length));left-=k;return k});
+  return {total:per.reduce((a,b)=>a+b,0),per};
+}
+/* Report-time arrival for temps: they meet the crew at the job. */
+const tempArrive=j=>{const c=parseClock(j.time);return c==null?null:c-(+S().arriveEarly||0)};
+function shortList(){const asg=tonight.assign||{};return tonight.jobs.filter(j=>asg[j.id]).map(j=>({j,n:openSpots(j,asg[j.id]).total,ag:agencyFor(j)})).filter(x=>x.n>0)}
 function jobIssues(j,crew){
   const iss=[];const cs=conflictSet();
   const offS=new Set(tonight.off);
@@ -1346,7 +1375,9 @@ function jobIssues(j,crew){
   const noLead=trucks.filter(t=>!t.lead).length;
   if(noLead)iss.push(["bad",noLead===T?(T>1?`No crew leads — all ${T} trucks need one`:"No crew lead — this truck can't go out"):`${noLead} of ${T} trucks still need a crew lead`]);
   const helpers=trucks.reduce((n,t)=>n+t.crew.length+(t.extra?1:0),0),needH=T*(P-1);
-  if(helpers<needH)iss.push(["warn",`Needs ${needH-helpers} more worker${needH-helpers>1?"s":""}`]);
+  if(helpers<needH){const n=needH-helpers,pl=n>1?"s":"";
+    if(tempsOn())iss.push(["warn",`Short ${n} worker${pl} — ${n} temp${pl} from ${agLine(agencyFor(j))}`]);
+    else iss.push(["warn",`Needs ${n} more worker${pl}`]);}
   if(helpers>needH)iss.push(["warn",`${helpers-needH} more than needed`]);
   spareLeads.forEach(w=>iss.push(["warn",`${w.name} (lead) is riding as a worker — their truck stays parked`]));
   trucks.forEach(t=>{if(t.lead&&hasLoc(t.lead)){const L=leadLimit(t.lead),d=travel(t.lead,j).mi;if(L&&d>L)iss.push(["warn",`${t.lead.name} lives ~${fmtMi(d)} mi from this job — past their ${L}-mile limit`])}});
@@ -1359,6 +1390,17 @@ function jobIssues(j,crew){
 function skippedJobs(){
   if(!tonight.assign)return [];
   return tonight.jobs.filter(j=>j.on&&!tonight.assign[j.id]).map(j=>({j,why:hasLoc(j)?"added after crews were built — tap Rebuild":"no map location yet"}));
+}
+function tempBanner(freeN){
+  const sh=shortList();if(!sh.length)return "";
+  const n=sh.reduce((a,x)=>a+x.n,0),pl=n>1?"s":"";
+  const fr=freeN?` ${freeN} available ${freeN>1?"people aren't":"person isn't"} assigned yet — move them in with <b>+ Add / move</b> first to need fewer${tempsOn()?" temps":""}.`:"";
+  if(tempsOn()){
+    const by=new Map();sh.forEach(x=>{const k=x.ag.a.id;if(!by.has(k))by.set(k,{a:x.ag.a,n:0,jobs:[]});const g=by.get(k);g.n+=x.n;g.jobs.push(`${x.n} for ${esc(x.j.name)}${x.j.time?" ("+esc(x.j.time)+")":""}`)});
+    return `<div class="warn"><b>Temp workers needed: ${n}.</b> They're shown as “Temp worker” on the crews and the copied schedule. Call to book:<ul style="margin:4px 0 0 18px;padding:0">${[...by.values()].map(g=>`<li><b>${esc(agName(g.a))}</b>${g.a.phone?` · <a href="tel:${esc(g.a.phone.replace(/[^\d+]/g,""))}" style="color:inherit;text-decoration:underline">${esc(g.a.phone)}</a>`:""} — ${g.n} temp${g.n>1?"s":""}: ${g.jobs.join(", ")}${g.a.note?`<div class="small muted">${esc(g.a.note)}</div>`:""}</li>`).join("")}</ul>${fr?`<div class="small" style="margin-top:4px">${fr}</div>`:""}</div>`;
+  }
+  const noAg=S().tempAgency&&!agencyList().length;
+  return `<div class="warn"><b>Short ${n} worker${pl}</b> on ${sh.length>1?sh.length+" jobs":"1 job"}: ${sh.map(x=>`${esc(x.j.name)} needs ${x.n}`).join(", ")}.${fr} ${noAg?`Add your temp agency to plan temp workers.`:`Turn on <b>Temp agency</b> to fill the open spots with temp workers and see which agency to call.`} <button class="b small" data-act="goTemp">${noAg?"Add a temp agency":"Temp agency settings"}</button></div>`;
 }
 function assignedIds(){const s=new Set();if(tonight.assign)for(const c of Object.values(tonight.assign))c.forEach(i=>s.add(i));return s}
 function availableWorkers(){const off=new Set(tonight.off);return roster.workers.filter(w=>w.active!==false&&!off.has(w.id))}
@@ -1452,6 +1494,10 @@ function rTonight(){
     const leadsAv=act.filter(w=>w.lead&&!off.has(w.id)).length;
     const trucksNeed=jobs.filter(j=>j.on).reduce((n,j)=>n+jTrucks(j),0);
     if(trucksNeed)h+=`<div class="${leadsAv>=trucksNeed?"good":"warn"}">${leadsAv} crew lead${leadsAv===1?"":"s"} available for ${trucksNeed} truck${trucksNeed===1?"":"s"}${leadsAv<trucksNeed?` — ${trucksNeed-leadsAv} truck${trucksNeed-leadsAv>1?"s":""} won't have a lead`:""}.</div>`;
+    {const onJ=jobs.filter(j=>j.on),ppl=onJ.reduce((n,j)=>n+jTrucks(j)*jPer(j),0);
+      if(ppl){const avL=act.filter(w=>!off.has(w.id)&&hasLoc(w));const lAv=avL.filter(w=>w.lead).length,wAv=avL.length-lAv,wNeed=ppl-trucksNeed;
+        const spareL=S().leadsAsHelpers?Math.max(0,lAv-trucksNeed):0,shortW=Math.max(0,wNeed-wAv-spareL),pl=shortW>1?"s":"";
+        if(wNeed>0)h+=`<div class="${shortW?"warn":"good"}">${wNeed} worker spot${wNeed>1?"s":""} to fill, ${wAv+spareL} available${spareL?` (counting ${spareL} spare lead${spareL>1?"s":""})`:""}${shortW?` — <b>short ${shortW} worker${pl}</b>. ${tempsOn()?`Plan on ${shortW} temp${pl}; the crews will show which agency to call.`:`<a href="#" data-act="goTemp">Turn on Temp agency</a> to plan temp workers.`}`:"."}</div>`;}}
     if(off.size)h+=`<div class="row" style="margin-top:8px"><button class="b" data-act="allOn">Everyone available</button></div>`;
   }
   const b2=h;h=pre2;
@@ -1561,6 +1607,7 @@ function rResults(){
   const sk=skippedJobs();
   if(sk.length)h+=`<div class="bad"><b>⚠ ${sk.length} job${sk.length>1?"s are":" is"} NOT on this schedule:</b> ${sk.map(x=>`${esc(x.j.name)} (${esc(x.why)})`).join("; ")}. ${sk.some(x=>!hasLoc(x.j))?`Fix the location in step 1, then tap Rebuild.`:`Tap Rebuild to give ${sk.length>1?"them":"it"} a crew.`}</div>`;
   if(!prob&&!sk.length)h+=`<div class="good">Every truck has a lead and a full crew, with no conflicts.</div>`;
+  h+=tempBanner(free.length);
   if(routeLastErr)h+=`<div class="warn">${esc(routeLastErr)}</div>`;
   else if(warmBusy)h+=`<div class="small muted" style="margin-top:6px">Getting road drive times…</div>`;
   if(anyEst)h+=`<div class="small muted" style="margin-top:6px">≈ = estimated (straight line at ${esc(S().avgMph)} mph). ${routeReady()?"Road times are on the way or unavailable for that spot.":`Add a free OpenRouteService key in <a href="#" data-act="goRoute">Settings → Road drive times</a> for real road times.`}</div>`;
@@ -1576,7 +1623,7 @@ function rResults(){
         extra=`<div class="small" style="padding:0 0 6px 2px">${m?`📍 <a href="${gmap(m.lat,m.lng)}" target="_blank" rel="noopener">${esc(m.name)}</a> · <a href="#" data-act="spot" data-w="${w.id}" data-j="${j.id}">change</a>`:`<a href="#" data-act="spot" data-w="${w.id}" data-j="${j.id}">Pick a meet spot</a> <span class="muted">(optional)</span>`}</div>`}
       if(role!=="lead"&&g&&g.kind==="pickup"&&w.address)extra=`<div class="small muted" style="padding:0 0 6px 2px">Pickup: ${esc(w.address)}</div>`;
       return `<div class="mem"><span class="n">${esc(w.name)}${role==="lead"?`<span class="tag lead">lead · truck</span>${isDriver(w.id,j.id)?`<span class="tag lock">driver picked by you</span>`:""}`:w.lead?`<span class="tag">lead, as worker</span>`:""}${(j.requested||[]).includes(w.id)?`<span class="tag lock">requested</span>`:""}${g?`<div class="small muted" style="margin-top:1px">${legText(g,pp)}</div>`:""}</span>${role!=="lead"&&w.lead?`<button class="x" data-act="mkDriver" data-w="${w.id}" data-j="${j.id}" title="${esc(first(w.name))} drives the truck" style="font-size:12px;width:auto;padding:0 6px;white-space:nowrap">🚚 Make driver</button>`:""}<button class="x" data-act="lock" data-w="${w.id}" data-j="${j.id}" title="${lk?"Unlock":"Keep on this job"}" style="font-size:15px;opacity:${lk?1:.45}">${lk?"🔒":"🔓"}</button><button class="x" data-act="unassign" data-w="${w.id}" data-j="${j.id}" title="Remove">×</button></div>${extra}`};
-    const tk=trucksFor(j,crew).trucks;let openLeft=Math.max(0,T*P-crew.length-tk.filter(t=>!t.lead).length);
+    const tkAll=trucksFor(j,crew),tk=tkAll.trucks,os=openSpots(j,crew,tkAll),temps=tempsOn(),ag=temps&&agencyFor(j),tArr=tempArrive(j);
     tk.forEach((t,k,all)=>{
       const pl=planTruck(j,t);
       h+=`<div style="margin-top:${k?8:0}px">${all.length>1?`<div class="small" style="font-weight:600">${truckLabel(t,k)}</div>`:""}`;
@@ -1584,7 +1631,7 @@ function rResults(){
       else if(pl&&j.time==null)h+=``;
       h+=t.lead?mem(t.lead,"lead",t,pl):`<div class="mem"><span class="n" style="color:var(--bad)">Needs a crew lead</span></div>`;
       t.crew.forEach(w=>h+=mem(w,"worker",t,pl));
-      if(!t.extra)for(let q=t.crew.length;q<P-1&&openLeft>0;q++,openLeft--)h+=`<div class="mem"><span class="n muted small">Open worker spot</span></div>`;
+      for(let q=0;q<(os.per[k]||0);q++)h+=temps?`<div class="mem"><span class="n">Temp worker<span class="tag">temp</span><div class="small muted" style="margin-top:1px">from ${esc(agName(ag&&ag.a))} · meets the crew at the job${tArr!=null?` by ${fmtClock(tArr)}`:""}</div></span></div>`:`<div class="mem"><span class="n muted small">Open worker spot</span></div>`;
       h+=`</div>`;
     });
     h+=`</div>`+iss.map(([k,m])=>`<div class="${k}">${esc(m)}</div>`).join("");
@@ -1682,7 +1729,7 @@ function rPairs(){
 function rSettings(){
   const s=S();
   return `<div class="card"><h2 style="margin-top:0">⚙ Settings</h2><p class="small muted">Things you set once. The daily work is on <b>Today</b>; people and who works with whom are on <b>Workers</b>.</p>
-  <div class="jump"><button class="chip" data-act="jump" data-to="rulesCard">Scheduling rules</button><button class="chip" data-act="jump" data-to="routeCard">Road drive times</button><button class="chip" data-act="jump" data-to="aiCard">AI assistant</button><button class="chip" data-act="jump" data-to="jobTextCard">Plain-English jobs</button><button class="chip" data-act="jump" data-to="backupCard">Backup &amp; restore</button><button class="chip" data-act="jump" data-to="helpCard">Help</button><button class="chip" data-act="jump" data-to="deleteCard">Delete data</button></div></div>
+  <div class="jump"><button class="chip" data-act="jump" data-to="rulesCard">Scheduling rules</button><button class="chip" data-act="jump" data-to="tempCard">Temp agency</button><button class="chip" data-act="jump" data-to="routeCard">Road drive times</button><button class="chip" data-act="jump" data-to="aiCard">AI assistant</button><button class="chip" data-act="jump" data-to="jobTextCard">Plain-English jobs</button><button class="chip" data-act="jump" data-to="backupCard">Backup &amp; restore</button><button class="chip" data-act="jump" data-to="helpCard">Help</button><button class="chip" data-act="jump" data-to="deleteCard">Delete data</button></div></div>
   <div class="card" id="rulesCard"><h2>Scheduling rules</h2>
   <div class="row"><label class="f grow" style="margin:0">Default people per truck (lead + workers)</label><input type="number" min="1" max="20" data-set="defaultCrew" value="${s.defaultCrew}"></div>
   <div class="row" style="margin-top:8px"><label class="f grow" style="margin:0"><b>Max distance from crew lead's home to job</b>, miles (0 = no limit). Set a different limit on any lead in their Workers profile.</label><input type="number" min="0" max="500" data-set="maxLeadMiles" value="${s.maxLeadMiles||0}"></div>
@@ -1696,6 +1743,7 @@ function rSettings(){
   <label class="row small" style="margin-bottom:6px"><input type="checkbox" data-set="allowStores" ${s.allowStores?"checked":""}> Meet spot search: include store &amp; gas station lots (Walmart, Food Lion…)</label>
   <label class="row small" style="margin-bottom:6px"><input type="checkbox" data-set="leadsAsHelpers" ${s.leadsAsHelpers?"checked":""}> If there are spare leads, let them fill worker spots (their truck stays parked)</label>
   <label class="row small"><input type="checkbox" data-set="extraTruck" ${s.extraTruck?"checked":""}> If a job has a spare lead, let them bring their own truck as an extra truck when they'd drive to the job alone anyway, or when it saves the crew at least ${EXTRA_TRUCK_MIN} min of driving</label></div>`
+  +rTempSettings()
   +`<h3 class="secHd">Connections</h3>`+rRouteSettings()+rAISettings()+rJobTextSettings()
   +`<h3 class="secHd">Your data</h3>`+rBackupCard()
   +rHelpCard()
@@ -1761,10 +1809,13 @@ function scheduleText(){
   tonight.jobs.forEach(j=>{const c=tonight.assign?.[j.id];if(!c)return;const T=jTrucks(j);
     t+=`\n${j.time?j.time+" · ":""}${j.name}${j.address?" — "+j.address:""}${T>1?` (${T} trucks)`:""}\n`;
     if(!c.length){t+="  (no one assigned)\n";return}
-    trucksFor(j,c).trucks.forEach((tr,k,all)=>{
-      const ppl=[tr.lead?`${tr.lead.name} (lead)${tr.lead.phone?" "+tr.lead.phone:""}`:"NEEDS LEAD",...tr.crew.map(w=>w.name+(w.phone?" "+w.phone:""))];
+    const tkT=trucksFor(j,c),osT=tempsOn()?openSpots(j,c,tkT):null,agT=osT&&agencyFor(j),arT=tempArrive(j);
+    tkT.trucks.forEach((tr,k,all)=>{
+      const nT=osT?osT.per[k]||0:0;
+      const ppl=[tr.lead?`${tr.lead.name} (lead)${tr.lead.phone?" "+tr.lead.phone:""}`:"NEEDS LEAD",...tr.crew.map(w=>w.name+(w.phone?" "+w.phone:"")),...(nT?[`${nT>1?nT+" temp workers":"Temp worker"} (${agName(agT.a)})`]:[])];
+      const tempLine=nT?`    ${nT>1?"Temps":"Temp"}: ${arT!=null?"be at the job by "+fmtClock(arT)+" — ":""}meet the crew at the job\n`:"";
       t+=`  ${all.length>1?`${truckLabel(tr,k)}: `:"• "}${ppl.join(", ")}\n`;
-      if(!tr.lead)return;
+      if(!tr.lead){t+=tempLine;return}
       const pl=planTruck(j,tr);const gl=legFor(j,tr.lead,tr);const A=pl&&!pl.real?"about ":"";
       if(pl&&pl.leave!=null)t+=`    ${first(tr.lead.name)}: leave ${fmtClock(pl.leave)} → on site ${A}${fmtClock(pl.arrive)}${gl?` (${fmtDur(gl.min)} drive)`:""}\n`;
       tr.crew.forEach(w=>{const g=legFor(j,w,tr);if(!g)return;const pp=pl&&pl.people[w.id]||{};
@@ -1776,8 +1827,16 @@ function scheduleText(){
         else how=`${pp.leave!=null?"leave "+fmtClock(pp.leave)+" — ":""}meet ${first(tr.lead.name)} ${pp.meet!=null?"at "+fmtClock(pp.meet)+" ":""}along the way (${fmtDur(g.min)} from home) near ${gmap(g.point.lat,g.point.lng)} — call to confirm the spot`;
         t+=`    ${first(w.name)}: ${how}\n`;
       });
+      t+=tempLine;
     });
   });
+  const shT=shortList();
+  if(shT.length){
+    if(tempsOn()){t+=`\nTEMP WORKERS NEEDED — ${shT.reduce((a,x)=>a+x.n,0)} total:\n`;
+      const by=new Map();shT.forEach(x=>{const k=x.ag.a.id;if(!by.has(k))by.set(k,{a:x.ag.a,rows:[]});by.get(k).rows.push(`    ${x.n} for ${x.j.time?x.j.time+" · ":""}${x.j.name}${x.j.address?" — "+x.j.address:""}`)});
+      by.forEach(g=>{t+=`  ${agName(g.a)}${g.a.phone?" "+g.a.phone:""}${g.a.address?" ("+g.a.address+")":""}\n${g.rows.join("\n")}\n`});}
+    else t+=`\n⚠ SHORT-HANDED — workers still needed:\n`+shT.map(x=>`  ${x.j.time?x.j.time+" · ":""}${x.j.name}: ${x.n} more worker${x.n>1?"s":""}\n`).join("");
+  }
   const sk=skippedJobs();
   if(sk.length)t+=`\n⚠ NOT SCHEDULED YET — no crew assigned:\n`+sk.map(x=>`  ${x.j.time?x.j.time+" · ":""}${x.j.name}${x.j.address?" — "+x.j.address:""} (${hasLoc(x.j)?"added late":"no map location"})\n`).join("");
   return t;
@@ -1788,12 +1847,14 @@ function scheduleCSV(){
   const how={lead:"Drives truck home to job",pickup:"Lead picks up at home",meet:"Meets truck along the way",atlead:"Meets at lead's home",atjob:"Meets at job",job:"Drives to job"};
   tonight.jobs.forEach(j=>{const c=tonight.assign?.[j.id];if(!c)return;
     if(!c.length){rows.push([j.time||"",j.name,j.address,"","","","","","","","","","","",""]);return}
-    trucksFor(j,c).trucks.forEach((tr,k)=>{
+    const tkC=trucksFor(j,c),osC=tempsOn()?openSpots(j,c,tkC):null,agC=osC&&agencyFor(j),arC=tempArrive(j);
+    tkC.trucks.forEach((tr,k)=>{
       const pl=planTruck(j,tr);
       if(tr.lead){const g=legFor(j,tr.lead,tr);rows.push([j.time||"",j.name,j.address,tr.extra?(k+1)+" (extra)":k+1,"Lead",tr.lead.name,tr.lead.phone||"",how.lead,pl&&pl.leave!=null?fmtClock(pl.leave):"","","","",g?Math.round(g.min):"",g?fmtMi(g.mi):"",g&&!g.real?"yes":""])}
       else rows.push([j.time||"",j.name,j.address,tr.extra?(k+1)+" (extra)":k+1,"Lead","(needs lead)","","","","","","","","",""]);
       tr.crew.forEach(w=>{const g=legFor(j,w,tr);const pp=pl&&pl.people[w.id]||{};const pt=g&&g.spot?g.spot:(g&&g.kind==="meet"?g.point:null);
         rows.push([j.time||"",j.name,j.address,tr.extra?(k+1)+" (extra)":k+1,"Worker",w.name,w.phone||"",g?how[g.kind]:"",pp.leave!=null?fmtClock(pp.leave):"",pp.ready!=null?fmtClock(pp.ready):pp.meet!=null?fmtClock(pp.meet):"",g&&g.spot?g.spot.name:"",pt?gmap(pt.lat,pt.lng):"",g&&g.kind!=="pickup"?Math.round(g.min):"",g&&g.kind!=="pickup"?fmtMi(g.mi):"",g&&!g.real?"yes":""])});
+      for(let q=0;q<(osC?osC.per[k]||0:0);q++)rows.push([j.time||"",j.name,j.address,tr.extra?(k+1)+" (extra)":k+1,"Temp",`Temp worker (${agName(agC.a)})`,agC.a.phone||"","Meets at job","",arC!=null?fmtClock(arC):"","","","","",""]);
     });
   });
   return rows.map(r=>r.map(q).join(",")).join("\n");
@@ -2150,6 +2211,27 @@ function rJobTextBox(){
   <div class="row" style="margin-top:6px"><button class="b small p" data-act="jobTextFill">Fill in the form</button><span class="small muted">Fills the boxes below for you to check. Nothing is saved until you tap Save.</span></div>
   <div id="jfTextMsg" class="small hide" style="margin-top:6px"></div></div>`;
 }
+function rTempSettings(){
+  const s=S(),as=s.agencies||[];
+  const fld=(a,f,label,ph,type)=>`<label class="f">${label}</label><input type="${type||"text"}" data-ag="${a.id}" data-agf="${f}" value="${esc(a[f]||"")}" placeholder="${esc(ph)}">`;
+  return `<div class="card" id="tempCard"><h2>Temp agency</h2>
+  <p class="small muted">When there aren't enough workers for the jobs, the crews say how many each job is short. Turn this on to plan temp workers instead: the open worker spots become “Temp worker” on the crews and the copied schedule, with the closest agency to call. Temps only fill worker spots, never crew lead — every truck still needs one of your leads.</p>
+  <label class="row small"><input type="checkbox" data-set="tempAgency" ${s.tempAgency?"checked":""}> Use a temp agency when we're short of workers</label>
+  ${s.tempAgency&&!agencyList().length?`<div class="warn">Add at least one agency below. Until then the crews just say how many workers are missing.</div>`:""}
+  ${as.map((a,i)=>`<div class="card" style="margin:10px 0 0;padding:10px"><div class="row" style="justify-content:space-between"><b>${esc(a.name||"Agency "+(i+1))}</b><button class="b small" data-act="agDel" data-id="${a.id}">Remove</button></div>
+    ${fld(a,"name","Name","e.g. Labor Plus Fayetteville")}${fld(a,"phone","Phone","910-555-0100","tel")}${fld(a,"address","Address","123 Main St, Fayetteville, NC")}
+    <div class="small ${a.address&&!hasLoc(a)?"":"muted"}" id="agLoc-${a.id}" style="margin-top:3px">${a.address?(hasLoc(a)?"📍 On the map"+(a.geoLabel?": "+esc(a.geoLabel.slice(0,90)):""):"⚠ Not found on the map yet — check the address. Without it this agency can't be picked as the closest."):"Add the address so the app can suggest the closest agency to each job."}</div>
+    ${fld(a,"note","Notes (optional)","e.g. call by 5 a.m., ask for Dana")}</div>`).join("")}
+  <div class="row" style="margin-top:10px"><button class="b" data-act="agAdd">+ Add ${as.length?"another":"an"} agency</button></div></div>`;
+}
+async function agencyLocate(a){
+  const el=()=>$("#agLoc-"+a.id);if(el())el().textContent="Looking up the address…";
+  let r=null;try{r=await geocodeAddress(a.address)}catch(e){}
+  const cur=(S().agencies||[]).find(x=>x.id===a.id);if(!cur||cur.address!==a.address)return;
+  if(r){cur.lat=r.lat;cur.lng=r.lng;cur.geoLabel=String(r.label||"").slice(0,300)}else{cur.lat=null;cur.lng=null;cur.geoLabel=""}
+  save("roster");if(tab==="settings")render();
+  if(!r)toast("Couldn't find that agency address on the map");
+}
 function rJobTextSettings(){
   const c=jtCfg();
   return `<div class="card" id="jobTextCard"><h2>✨ Type jobs in plain English</h2>
@@ -2219,7 +2301,7 @@ function snapshotJobs(){
       workers:t.crew.map(w=>{const g=legFor(j,w,t);const m=t.lead&&meetFor(w.id,t.lead.id,j.id);const pl=planTruck(j,t);const pp=pl&&pl.people[w.id]||{};
         const tm=pp.ready!=null?" "+fmtClock(pp.ready):pp.meet!=null?" "+fmtClock(pp.meet):"";
         return {id:w.id,name:w.name,how:g?({pickup:"Picked up at home"+tm,meet:(m?"Met truck at "+m.name:"Met truck along the way")+tm,atlead:"Met at lead's home",atjob:"Met at job",job:"Drove to job"}[g.kind]||""):""}})}));
-    out.push({key:jobKey(j),time:j.time||"",name:j.name,client:clientOf(j),contact:contactOf(j),title:j.title||"",address:j.address||"",trucks:jTrucks(j),perTruck:jPer(j),note:"",aiNote:j.aiNote||"",status:null,closedAt:null,people:[],crews:trucks});
+    out.push({key:jobKey(j),time:j.time||"",name:j.name,client:clientOf(j),contact:contactOf(j),title:j.title||"",address:j.address||"",trucks:jTrucks(j),perTruck:jPer(j),note:"",aiNote:j.aiNote||"",status:null,closedAt:null,people:[],crews:trucks,...(()=>{if(!tempsOn())return {};const n=openSpots(j,c).total;return n?{temps:{n,agency:agName(agencyFor(j).a)}}:{}})()});
   }
   return out;
 }
@@ -2394,7 +2476,7 @@ function rHistDay(date){
     h+=`<div class="job" style="--c:${j.status?({done:"#16a34a",rain:"#2563eb",cancel:"#9ca3af"})[j.status]:"#f59e0b"};margin-bottom:10px;${j.dropped?"opacity:.6":""}"><div class="hd"><span class="nm">${j.time?esc(j.time)+" · ":""}${esc(j.name)}</span></div>${j.address?`<div class="small muted">${esc(j.address)}</div>`:""}${j.dropped?`<div class="small muted">Not on the latest schedule</div>`:""}
       <div class="row" style="margin:8px 0 4px;gap:6px">${Object.entries(STATUS).map(([k,v])=>`<button class="stbtn ${k} ${j.status===k?"on":""}" data-act="histStatus" data-d="${date}" data-i="${i}" data-s="${k}">${v.icon} ${v.label}</button>`).join("")}</div>
       ${j.closedAt?`<div class="small muted">Closed out ${esc(tLabel(j.closedAt))}</div>`:""}
-      <div style="margin-top:6px">${j.crews.map(t=>`<div class="small" style="margin-top:3px">${j.crews.length>1?`<b>Truck ${t.truck}:</b> `:""}${t.lead?`<b>${esc(t.lead.name)}</b> (lead)`:`<span style="color:var(--bad)">no lead</span>`}${t.workers.map(w=>`, ${esc(w.name)}${w.how?` <span class="muted">— ${esc(w.how)}</span>`:""}`).join("")}</div>`).join("")}</div>
+      <div style="margin-top:6px">${j.crews.map(t=>`<div class="small" style="margin-top:3px">${j.crews.length>1?`<b>Truck ${t.truck}:</b> `:""}${t.lead?`<b>${esc(t.lead.name)}</b> (lead)`:`<span style="color:var(--bad)">no lead</span>`}${t.workers.map(w=>`, ${esc(w.name)}${w.how?` <span class="muted">— ${esc(w.how)}</span>`:""}`).join("")}</div>`).join("")}${j.temps&&j.temps.n?`<div class="small" style="margin-top:3px">+ ${j.temps.n} temp worker${j.temps.n>1?"s":""} from ${esc(j.temps.agency)}</div>`:""}</div>
       ${(j.people||[]).length?`<div style="margin-top:6px">${j.people.map((pc,k)=>`<div class="small">• <b>${esc(pc.name)}</b>: ${esc(CHANGE_KINDS[pc.kind]||pc.kind)}${pc.note?` — ${esc(pc.note)}`:""} <a href="#" data-act="histDelChange" data-d="${date}" data-i="${i}" data-k="${k}" class="muted">remove</a></div>`).join("")}</div>`:""}
       <details style="margin-top:6px"><summary class="small">Add a crew change</summary>
         <div class="row" style="margin-top:6px"><select id="pcName-${i}" class="grow"><option value="">Who?</option>${[...new Set([...histPeople(j),...roster.workers.map(w=>w.name)])].map(n=>`<option>${esc(n)}</option>`).join("")}</select><select id="pcKind-${i}" class="grow">${Object.entries(CHANGE_KINDS).map(([k,v])=>`<option value="${k}">${v}</option>`).join("")}</select></div>
@@ -2742,6 +2824,9 @@ document.addEventListener("click",async e=>{
       if(routeReady()){el.textContent="Getting road drive times…";await warmBeforeSolve()}
       el.textContent="Working…";setTimeout(()=>{todayOpen={};pinDay();solve();render();$("#step3")?.scrollIntoView({block:"start"});scheduleWarm()},20);break;}
     case "goRoute":goSettings("routeCard");break;
+    case "goTemp":goSettings("tempCard");break;
+    case "agAdd":{S().agencies=S().agencies||[];S().agencies.push({id:uid(),name:"",address:"",phone:"",note:"",lat:null,lng:null,geoLabel:""});save("roster");render();setTimeout(()=>{const l=[...document.querySelectorAll('[data-agf=name]')].pop();if(l)l.focus()},0);break}
+    case "agDel":{const a=(S().agencies||[]).find(x=>x.id===el.dataset.id);if(!a)break;if((a.name||a.address||a.phone)&&!await ask(`Remove ${a.name||"this agency"}?`,"Remove"))break;S().agencies=S().agencies.filter(x=>x.id!==a.id);save("roster");render();break}
     case "routeSave":{const k=$("#routeKey").value.trim();if(!k){toast("Paste the key first");return}routeSetCfg({key:k});routePauseUntil=0;routeLastErr="";routeMiss.clear();logEvent("route-setup","saved key");render();toast("Road drive times turned on — rebuild crews to use them");break;}
     case "routeRemove":if(await ask("Remove the OpenRouteService key from this device? Times will be estimated.","Remove")){routeSetCfg({});render();toast("Key removed")}break;
     case "routeClear":if(await ask("Forget all remembered drive times? They'll be looked up again as needed.","Forget")){for(const k in RC)delete RC[k];for(const k in RG)delete RG[k];routeMiss.clear();rcSave();render();toast("Saved drive times cleared")}break;
@@ -2872,7 +2957,9 @@ document.addEventListener("change",e=>{
   if(el.dataset.act==="assignTo"){const wid=el.value,jid=el.dataset.j;if(!wid)return;
     for(const k in tonight.assign)tonight.assign[k]=tonight.assign[k].filter(x=>x!==wid);
     tonight.assign[jid].push(wid);tonight.locks[wid]=jid;save("tonight");render();return}
-  if(el.dataset.set){const k=el.dataset.set;roster.settings[k]=el.type==="checkbox"?el.checked:Math.max(0,parseFloat(el.value)||0);if(k==="roadFactor"&&roster.settings[k]<1)roster.settings[k]=1;if(k==="defaultCrew"&&roster.settings[k]<1)roster.settings[k]=1;if(k==="avgMph"&&roster.settings[k]<5)roster.settings[k]=5;save("roster");if(tonight.assign&&tab==="tonight")render();return}
+  if(el.dataset.agf){const a=(S().agencies||[]).find(x=>x.id===el.dataset.ag);if(!a)return;const f=el.dataset.agf;const v=el.value.trim().slice(0,f==="name"||f==="phone"?(f==="name"?80:40):200);if((a[f]||"")===v)return;a[f]=v;
+    if(f==="address"){a.lat=null;a.lng=null;a.geoLabel="";save("roster");if(v)agencyLocate(a);else render()}else{save("roster");if(f==="name")render()}return}
+  if(el.dataset.set){const k=el.dataset.set;roster.settings[k]=el.type==="checkbox"?el.checked:Math.max(0,parseFloat(el.value)||0);if(k==="roadFactor"&&roster.settings[k]<1)roster.settings[k]=1;if(k==="defaultCrew"&&roster.settings[k]<1)roster.settings[k]=1;if(k==="avgMph"&&roster.settings[k]<5)roster.settings[k]=5;save("roster");if((tonight.assign&&tab==="tonight")||k==="tempAgency")render();return}
 
 });
 $("#fileJobs").addEventListener("change",async e=>{
