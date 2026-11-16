@@ -236,6 +236,85 @@ END:VCALENDAR`;
   ok(await p4.evaluate(()=>S().tempAgency===true&&S().agencies.length===1&&S().agencies[0].name==="Labor Plus"),'temp agencies come back with a backup');
   ok(p.errs.length+p4.errs.length===0,'no script errors (temp agency)',[p.errs,p4.errs]);
 
+  // ---------- 16. fixes from the Nov 16 review ----------
+  p=await open();await closeModalIfAny(p);
+  // a lead past their mile limit never ends up driving (normal settings, short-handed 2-truck job)
+  r=await p.evaluate(()=>{
+    roster.settings={...DEFAULT_SETTINGS,maxLeadMiles:30,agencies:[]};
+    roster.workers=[{id:"near",name:"Near Lead",lat:35.05,lng:-78.90,lead:true,active:true},{id:"far",name:"Far Lead",lat:35.95,lng:-79.90,lead:true,active:true},{id:"h1",name:"Helper One",lat:35.06,lng:-78.92,active:true}];
+    roster.conflicts=[];roster.prefers=[];
+    tonight={jobs:[{id:"j1",name:"Two Truck Job",time:"7:00a",lat:35.00,lng:-78.95,crew:3,trucks:2,requested:[],avoid:[],on:true}],assign:null,locks:{},off:[],drivers:{}};normalize();
+    solveInner();const j=tonight.jobs[0];const auto=trucksFor(j,tonight.assign.j1).trucks.map(t=>t.lead&&t.lead.id);
+    tonight.assign.j1=["near","h1","far"];tonight.locks.far="j1";solveInner();const byHand=trucksFor(j,tonight.assign.j1).trucks.map(t=>t.lead&&t.lead.id);
+    // the "+ Add / move" menu marks past-limit leads by miles, not minutes
+    roster.settings.maxLeadMiles=40;roster.workers.push({id:"mid",name:"Mid Lead",lat:35.42,lng:-78.95,lead:true,active:true});tonight.locks={};tonight.assign={j1:["near","h1"]};render();
+    const opt=[...document.querySelectorAll('select[data-act=assignTo] option')].map(o=>o.textContent);
+    return {auto,byHand,mid:opt.find(t=>/Mid Lead/.test(t)),far:opt.find(t=>/Far Lead/.test(t)),midMi:Math.round(travel(wById("mid"),j).mi)}});
+  ok(r.auto.includes("near")&&!r.auto.includes("far"),'a lead past their mile limit is not given the second truck',r.auto);
+  ok(r.byHand.includes("far"),'a lead locked to the job by hand may still drive past the limit',r.byHand);
+  ok(r.midMi<40&&!/past/.test(r.mid)&&/past 40-mi limit/.test(r.far),'Add / move menu: “past limit” goes by miles',r);
+  r=await p.evaluate(()=>{let over=0;const rnd=Math.random;
+    for(let d=0;d<120;d++){const n=12+Math.floor(rnd()*20);
+      roster.workers=[...Array(n)].map((_,i)=>({id:"w"+i,name:"W"+i,lat:35+rnd(),lng:-79.5+rnd(),lead:rnd()<0.4,active:true,maxMiles:rnd()<0.3?25:0}));roster.settings.maxLeadMiles=40;roster.settings.extraTruck=true;roster.settings.leadsAsHelpers=true;
+      tonight.jobs=[...Array(3+Math.floor(rnd()*6))].map((_,i)=>({id:"j"+i,name:"Job"+i,time:"7:00a",lat:35+rnd(),lng:-79.5+rnd(),crew:1+Math.floor(rnd()*4),trucks:1+Math.floor(rnd()*2),requested:[],avoid:[],on:true}));
+      tonight.off=[];tonight.locks={};tonight.drivers={};tonight.assign=null;solveInner();
+      for(const j of tonight.jobs)for(const t of trucksFor(j,tonight.assign[j.id]).trucks)if(t.lead){const L=leadLimit(t.lead);if(L&&travel(t.lead,j).mi>L)over++}}
+    return over});
+  ok(r===0,'extra truck on: no lead drives past their limit on 120 random days',r);
+  // rebuild keeps people where they are
+  await p.evaluate(()=>{roster.settings={...DEFAULT_SETTINGS,agencies:[]};loadSample()});
+  r=await p.evaluate(()=>{tonight.assign=null;solveInner();const sig=()=>tonight.jobs.map(j=>(tonight.assign[j.id]||[]).slice().sort().join(',')).join('|');const a=sig();let same=true;for(let i=0;i<8;i++){solveInner();if(sig()!==a)same=false}return same});
+  ok(r,'Rebuild with nothing changed leaves every crew as it was');
+  // a form keeps what was typed when the screen is redrawn in the background
+  await p.evaluate(()=>{tonight.assign=null;tab="tonight";render()});
+  await p.click('[data-act=addJob]');await p.fill('#jfName','Smith mowing');await p.fill('#jfAddr','412 Oak St, Raeford, NC');await p.locator('#jfReq .chip').first().click();
+  r=await p.evaluate(()=>{document.querySelector('#jfAddr').focus();render();return {name:document.querySelector('#jfName').value,addr:document.querySelector('#jfAddr').value,chip:!document.querySelector('#jfReq .chip').classList.contains('off'),focus:document.activeElement.id}});
+  ok(r.name==='Smith mowing'&&r.addr==='412 Oak St, Raeford, NC'&&r.chip&&r.focus==='jfAddr','Add a job keeps typed text, requested people and the cursor through a redraw',r);
+  await p.click('[data-tab=workers]');
+  ok(await p.locator('.modal',{hasText:"haven't saved"}).count()===1,'switching tabs with a half-filled job asks first');
+  await p.keyboard.press('Escape');
+  ok(await p.locator('.modalbg').count()===0&&await p.inputValue('#jfName')==='Smith mowing','Esc closes the pop-up and the form is still there');
+  await p.click('[data-act=cancelJob]');
+  // More menu stays on a phone screen
+  await p.locator('#step1 details.more summary').click();await p.waitForTimeout(80);
+  r=await p.evaluate(()=>{const m=document.querySelector('#step1 details.more .menu').getBoundingClientRect();return {left:Math.round(m.left),right:Math.round(m.right),w:document.documentElement.clientWidth}});
+  ok(r.left>=0&&r.right<=r.w,'More menu in step 1 fits on a phone screen',r);
+  await p.locator('h1').click();
+  // truck counts refresh before crews are built
+  await p.locator('[data-act=jobTrucks]').first().fill('4');await p.locator('[data-act=jobTrucks]').first().dispatchEvent('change');await p.waitForTimeout(60);
+  ok(/for 10 trucks/.test(await p.locator('#step2').innerText()),'changing Trucks before building updates the step 2 counts');
+  // Clear crews asks; taking someone off a crew can be undone
+  await p.click('#step3 [data-act=solve]');await p.waitForSelector('.stats');
+  const offId=await p.locator('[data-act=unassign]').first().getAttribute('data-w');
+  await p.locator('[data-act=unassign]').first().click();
+  ok(!(await p.evaluate(id=>assignedIds().has(id),offId)),'× takes the person off the crew');
+  await p.locator('.toast button',{hasText:'Undo'}).last().click();
+  ok(await p.evaluate(id=>assignedIds().has(id),offId),'Undo puts the person back on the crew');
+  await p.locator('#step3 details.more summary').click();await p.locator('[data-act=clearAsg]').click();
+  ok(await p.locator('.modal',{hasText:'Clear the crews'}).count()===1&&await p.evaluate(()=>!!tonight.assign),'Clear crews asks before clearing');
+  await p.locator('.modal [data-r=c]').click();
+  // ids from a file are cleaned; a crafted file cannot run script
+  r=await p.evaluate(async()=>{window.__x=0;const pack=JSON.stringify({jobs:[{id:'a"><img src=x onerror="window.__x=1">',name:"Job",lat:35,lng:-79,crew:2,trucks:1}],off:[],locks:{}});
+    const pr=loadPackJobs(pack,"","t.json");await new Promise(r=>setTimeout(r,50));document.querySelector('.modal [data-r=o]')?.click();await pr;await new Promise(r=>setTimeout(r,200));
+    const b=readBackup(JSON.stringify({roster:{workers:[{id:'x"><b>',name:"A"},{id:"ok_1",name:"B"}],conflicts:[['x"><b>',"ok_1"]]}}));
+    return {ran:window.__x,jobId:tonight.jobs[0].id,ids:b.workers.map(w=>w.id),pair:b.conflicts[0]}});
+  ok(r.ran===0&&/^[\w-]+$/.test(r.jobId)&&r.ids.every(i=>/^[\w-]+$/.test(i))&&r.pair[0]===r.ids[0],'ids read from a file are cleaned up',r);
+  // History: two jobs with the same name and time keep their own close-out
+  r=await p.evaluate(async()=>{loadSample();tonight.jobs=tonight.jobs.slice(0,2);tonight.jobs.forEach(j=>{j.title="";j.name="Smith";j.time="7:00a"});tonight.day=dayKey(new Date());tonight.assign=null;solve();await saveDayToHistory(true);
+    const d=scheduleDay();await histEdit(d,c=>{c.jobs[0].status="done";c.jobs[1].status="rain"});await saveDayToHistory(true);return HIST.get(d).jobs.map(j=>j.status+(j.dropped?" dropped":""))});
+  ok(JSON.stringify(r)==='["done","rain"]','two jobs with the same name and time keep their own History status',r);
+  // deleting a worker tidies up, and same first names get a last initial on the schedule
+  r=await p.evaluate(()=>{loadSample();const j=tonight.jobs[0];const w=roster.workers.find(x=>!x.lead);j.avoid=[w.id];tonight.off=[w.id];
+    roster.workers=roster.workers.filter(x=>x.id!==w.id);tonight.off=tonight.off.filter(x=>x!==w.id);j.avoid=[];   // what Delete does is checked through the button below
+    const L=roster.workers.find(x=>x.lead),H=roster.workers.find(x=>!x.lead);L.name="Mike Stone";H.name="Mike Turner";tonight.jobs=[j];j.trucks=1;j.crew=2;tonight.assign={[j.id]:[L.id,H.id]};
+    return scheduleText()});
+  ok(/Mike S\.:/.test(r)&&/Mike T\.:/.test(r),'same first name on one job: the schedule adds the last initial',r.slice(0,300));
+  await p.evaluate(()=>{loadSample();const w=roster.workers.find(x=>!x.lead);tonight.jobs[0].avoid=[w.id];tonight.off=[w.id];tab="workers";editingWorker=w.id;render()});
+  await p.click('[data-act=delWorker]');await p.click('.modal [data-r=o]');await p.waitForTimeout(100);
+  r=await p.evaluate(()=>({off:tonight.off.length,avoid:tonight.jobs[0].avoid.length}));
+  ok(r.off===0&&r.avoid===0,'deleting a worker also clears them from the off and don\'t-send lists',r);
+  ok(p.errs.length===0,'no script errors (review fixes)',p.errs);
+
   // ---------- 14. version and What's new are in step ----------
   r=await p.evaluate(()=>({v:APP_VERSION,top:CHANGELOG[0].v,shown:document.querySelector('#appVer').textContent}));
   ok(r.v===r.top&&r.shown==="v"+r.v,'APP_VERSION matches the newest What\'s new entry',r);
