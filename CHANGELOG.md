@@ -2,6 +2,51 @@
 
 Tap the version number at the top of the app to see this inside Crew Scheduler.
 
+## 2026.11.16-b — Nov 16, 2026
+
+**New**
+- After you take someone off a crew with ×, the message now has a second button: Keep off this job. Tap it and a rebuild won't put that person back on that job today. They can still go to another job.
+- A job's “Don't send” names now each have a small × so you can allow that person on the job again.
+- On a phone, Save backup file (and the History backup) now opens the Share sheet, so you can text or email the backup to yourself, AirDrop it, or Save to Files. On a computer it still downloads as before.
+- The tool that opens .kmz map files and .zip files is now built into the app, so those open with no internet, and the app no longer loads any code from another website.
+
+**Fixed**
+- If you close the Share sheet without saving the backup, the app no longer counts it as backed up.
+
+## 2026.11.16-a — Nov 16, 2026
+
+**New**
+- Rebuild now keeps people where they already are unless moving someone saves real driving, and a message says who changed jobs. Before, a rebuild could reshuffle people who had already been told where to go.
+- Taking someone off a crew with × now shows an Undo button for a few seconds, and the ×, 🔒 and tick boxes are bigger and easier to hit on a phone.
+- When two people on a job have the same first name, the copied schedule adds the last initial (Mike S., Mike T.).
+- When you restore a backup and already have workers, Merge is now the highlighted button, and the message explains what Merge and Replace each do.
+- Pop-ups close with the Esc key, and the folded steps and job rows can be reached with the keyboard.
+- Settings → Backup & restore notes that on an iPhone, Safari and the Home Screen icon each keep their own data.
+
+**Fixed**
+- A crew lead could be given a truck on a job past their mile limit: on a short-handed day a far-away lead was pulled in to fill an empty seat and ended up driving the second truck, and the extra truck option didn't check the limit at all. Now a lead past their limit never drives unless you put them there yourself. They may still ride along as a worker.
+- In the “+ Add / move someone here” menu, the “past limit” note compared minutes with miles, so some leads were marked past their limit when they weren't.
+- What you were typing could disappear: if the app finished looking up addresses while you were filling in Add a job or Add worker, the form went blank. The form now keeps what you typed. The temp agency boxes and the AI “Anything special today?” box no longer lose text either.
+- Switching tabs with a half-filled job or worker now asks before throwing it away.
+- On a phone, the More menu in step 1 ran off the right edge of the screen. It now stays on screen.
+- Links were dark blue on a dark background in dark mode and hard to read. They're now light blue.
+- More → Clear crews wiped the crews and locks at once. It now asks first.
+- Changing Trucks or Per truck on a job before building crews didn't update the counts in step 2.
+- Two jobs with the same name and time on one day could swap or lose their close-out status in History when the schedule was saved again.
+- Deleting a worker left an empty “Don't send:” line on jobs and kept them in the off list.
+- Loading new jobs now clears an old AI review, and applying an old suggestion no longer takes someone off their job.
+- Backup and spreadsheet file names used the wrong date in the evening. The crews spreadsheet is now named for the day being scheduled.
+- In plain-English job entry, the basic reader read “at 5” as 5:00p. It now reads it as 5:00a, the same as the Report time box.
+- Safety: odd characters in the IDs inside a backup or support pack file are now removed when the file is loaded.
+
+## 2026.11.15-a — Nov 15, 2026
+
+**New**
+- New Temp agency setting (Settings → Temp agency). Add one or more temp agencies with their name, phone, address and a note. Off until you turn it on.
+- When there aren't enough workers, the app now says so: step 2 shows how many worker spots there are to fill and how many people are available, and after Build crews a note lists how many workers each job is short. The copied schedule ends with a “SHORT-HANDED” list. If the temp agency setting is off, it offers to turn it on.
+- With the temp agency setting on, open worker spots show as “Temp worker” on the crews, the copied schedule and the CSV, meeting the crew at the job before report time. The app suggests the agency closest to each job and lists who to call and how many temps for which job. Temps only fill worker spots: every truck still needs one of your crew leads.
+- History notes how many temp workers a job used and from which agency.
+
 ## 2026.11.14-a — Nov 14, 2026
 
 **New**
