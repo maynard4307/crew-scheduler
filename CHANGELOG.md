@@ -2,6 +2,17 @@
 
 Tap the version number at the top of the app to see this inside Crew Scheduler.
 
+## 2026.11.16-b — Nov 16, 2026
+
+**New**
+- After you take someone off a crew with ×, the message now has a second button: Keep off this job. Tap it and a rebuild won't put that person back on that job today. They can still go to another job.
+- A job's “Don't send” names now each have a small × so you can allow that person on the job again.
+- On a phone, Save backup file (and the History backup) now opens the Share sheet, so you can text or email the backup to yourself, AirDrop it, or Save to Files. On a computer it still downloads as before.
+- The tool that opens .kmz map files and .zip files is now built into the app, so those open with no internet, and the app no longer loads any code from another website.
+
+**Fixed**
+- If you close the Share sheet without saving the backup, the app no longer counts it as backed up.
+
 ## 2026.11.16-a — Nov 16, 2026
 
 **New**

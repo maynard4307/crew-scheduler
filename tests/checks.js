@@ -315,6 +315,40 @@ END:VCALENDAR`;
   ok(r.off===0&&r.avoid===0,'deleting a worker also clears them from the off and don\'t-send lists',r);
   ok(p.errs.length===0,'no script errors (review fixes)',p.errs);
 
+  // ---------- 17. 2026.11.16-b: keep off this job, built-in unzip, share sheet ----------
+  r=await p.evaluate(()=>({zip:typeof JSZip,ext:[...document.scripts].filter(s=>s.src).length}));
+  ok(r.zip==="function"&&r.ext===0,'unzip tool is built in and no outside scripts are loaded',r);
+  r=await p.evaluate(async()=>{const z=new JSZip();z.file("a.txt","hello");const b=await z.generateAsync({type:"blob"});const y=await JSZip.loadAsync(b);return await y.file("a.txt").async("string")});
+  ok(r==="hello",'built-in unzip tool makes and reads a zip with no internet',r);
+  await p.evaluate(()=>{loadSample();tonight.assign=null;tonight.locks={};solve();tab="tonight";render();document.querySelectorAll('.toast').forEach(t=>t.remove())});
+  const un=await p.evaluate(()=>{const b=document.querySelector('#step3 [data-act=unassign]');return {w:b.dataset.w,j:b.dataset.j}});
+  await p.locator(`#step3 [data-act=unassign][data-w="${un.w}"]`).click();
+  r=await p.evaluate(()=>[...document.querySelectorAll('.toast button')].map(b=>b.textContent));
+  ok(r.includes("Undo")&&r.includes("Keep off this job"),'taking someone off offers Undo and Keep off this job',r);
+  await p.locator('.toast button',{hasText:'Keep off this job'}).click();
+  r=await p.evaluate(({w,j})=>{const out={avoid:jById(j).avoid.includes(w),back:[]};for(let i=0;i<6;i++){solveInner();out.back.push(tonight.assign[j].includes(w))}render();return out},un);
+  ok(r.avoid&&r.back.every(x=>!x),'Keep off this job: six rebuilds never put the person back on that job',r);
+  await p.evaluate(()=>{for(let e=document.querySelector('[data-act=rmAvoid]');e;e=e.parentElement)if(e.tagName==='DETAILS')e.open=true});
+  r=await p.locator(`#step3 [data-act=rmAvoid][data-w="${un.w}"]`).count();
+  ok(r===1,'the Don\'t-send name has a × to allow them again',r);
+  await p.locator(`#step3 [data-act=rmAvoid][data-w="${un.w}"]`).click();
+  r=await p.evaluate(({w,j})=>jById(j).avoid.includes(w),un);
+  ok(r===false,'× on a Don\'t-send name allows the person on the job again',r);
+  // share sheet: phone shares, cancelled share is not a backup, computer downloads
+  const pS=await open({hasTouch:true,isMobile:true});
+  r=await pS.evaluate(async()=>{loadSample();window.__sh=[];navigator.canShare=d=>!!(d&&d.files&&d.files.length);navigator.share=async d=>{window.__sh.push(d.files[0].name+"|"+d.files[0].type+"|"+d.files[0].size)};
+    const coarse=matchMedia("(pointer:coarse)").matches;localStorage.removeItem("crew_backup");tab="settings";render();return {coarse}});
+  await pS.click('[data-act=saveRoster]');await pS.waitForTimeout(150);
+  r=Object.assign(r,await pS.evaluate(()=>({sh:window.__sh,at:!!backupInfo().at})));
+  ok(r.coarse&&r.sh.length===1&&/^crew-roster-.*\.json\|application\/json\|\d+$/.test(r.sh[0])&&+r.sh[0].split("|")[2]>100&&r.at,'on a phone, Save backup file opens the Share sheet with the backup',r);
+  r=await pS.evaluate(async()=>{const before=backupInfo().at;navigator.share=async()=>{const e=new Error("x");e.name="AbortError";throw e};return {r:await download("crew-roster-x.json","{}",{share:true}),same:backupInfo().at===before}});
+  ok(r.r===false,'closing the Share sheet is reported as not saved',r);
+  r=await pS.evaluate(async()=>{navigator.canShare=()=>false;let clicked=0;const oc=HTMLAnchorElement.prototype.click;HTMLAnchorElement.prototype.click=function(){clicked++};const x=await download("crew-roster-x.json","{}",{share:true});HTMLAnchorElement.prototype.click=oc;return {x,clicked}});
+  ok(r.x!==false&&r.clicked===1,'a phone that can\'t share files falls back to a normal download',r);
+  r=await p.evaluate(async()=>{let shared=0,clicked=0;navigator.canShare=()=>true;navigator.share=async()=>{shared++};const oc=HTMLAnchorElement.prototype.click;HTMLAnchorElement.prototype.click=function(){clicked++};await download("crew-roster-x.json","{}",{share:true});HTMLAnchorElement.prototype.click=oc;return {shared,clicked,coarse:matchMedia("(pointer:coarse)").matches}});
+  ok(r.shared===0&&r.clicked===1,'on a computer the backup still downloads',r);
+  ok(p.errs.length+pS.errs.length===0,'no script errors (16-b)',[p.errs,pS.errs]);await pS.context().close();
+
   // ---------- 14. version and What's new are in step ----------
   r=await p.evaluate(()=>({v:APP_VERSION,top:CHANGELOG[0].v,shown:document.querySelector('#appVer').textContent}));
   ok(r.v===r.top&&r.shown==="v"+r.v,'APP_VERSION matches the newest What\'s new entry',r);

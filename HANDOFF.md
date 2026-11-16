@@ -4,7 +4,7 @@
 
 - Live app: https://maynard4307.github.io/crew-scheduler/
 - Repository: https://github.com/maynard4307/crew-scheduler (public; GitHub Pages from `main`, root)
-- Current version: **2026.11.16-a** (shown in the app's top bar; tap it for What's new)
+- Current version: **2026.11.16-b** (shown in the app's top bar; tap it for What's new)
 - Owner: maynard4307 · Primary user: the owner's brother (dispatcher, iPhone + PC)
 
 ## 1. What it's for
@@ -54,7 +54,7 @@ Tabs: **Today · Workers · History · ⚙ Settings** (since 2026.11.11-a; befor
 
 ## 4. How it's built
 
-- **One file:** `index.html` (HTML + CSS + vanilla JS, no build step). Only external script: JSZip from cdnjs (KMZ/zip import and support-pack zips).
+- **One file:** `index.html` (HTML + CSS + vanilla JS, no build step). No external scripts: JSZip 3.10.1 is pasted into the first `<script>` block (KMZ/zip import and support-pack zips), so the file is about 420 KB. To update JSZip, replace that block with the new `dist/jszip.min.js`.
 - **Runs in the browser**; nothing runs on a server. Works as the GitHub Pages site, a downloaded `.html` file (PC/Android), and a Claude artifact (limited — see §7).
 
 ### Data storage (all on the device)
@@ -163,5 +163,6 @@ Never commit backups, support packs, CSVs or keys (`.gitignore` blocks `*.json`,
 | Nov 11, 2026 | Plain-English job entry (off by default): AI only fills the Add a job form for review, never changes crews or drivers. Free first: Chrome built-in AI, then a free Gemini key, then the existing Claude key; basic offline reader always as the fallback. Only the typed sentence is sent; the roster is matched on the device |
 | Nov 14, 2026 | Full review, then a safety release (2026.11.14-a): failed saves are loud, backup reminder, skipped jobs shown on the schedule, past-date warning, unticked jobs come off at once. Multi-day and repeating calendar events load on every day they cover (owner's call until the dispatcher confirms how the calendar is used). "Scheduling for" starts on Tomorrow from 3 p.m. AI wording corrected: job-site addresses and calendar notes are sent, home addresses and phones never. Release checks saved in `tests/checks.js` |
 | Nov 15, 2026 | Temp agency option (off by default): several agencies, closest one suggested; temps only fill worker spots, never lead. Off = a note saying how many workers are short; on = Temp worker placeholders on the crews and schedule |
+| Nov 16, 2026 | 2026.11.16-b, Justin chose three of the four open items: “Keep off this job” on the Undo message after × (adds the person to that job's `avoid` list; each Don't-send name has a × to undo, `rmAvoid`); JSZip built into the file; backups use the Share sheet on a phone (`shareFile`, only when the pointer is coarse and `navigator.canShare` accepts the file, otherwise the normal download; a cancelled share does not count as a backup). Not yet tried on a real iPhone. Still open: whether the copied schedule should hide home addresses and phones. |
 | Nov 16, 2026 | Second review, then a fix release (2026.11.16-a). Mile limit: a lead past their limit never drives unless placed by hand, but may ride as a worker. Rebuild keeps people where they are unless moving saves more than about 5 minutes each. Forms keep typed text through background redraws. Restore: Merge is the highlighted choice. Ids read from files are cleaned (`cleanId`). History job keys get `#2`, `#3` when a name and time repeat on one day. Left for the owner to decide: whether the copied schedule should include home addresses and phones; a "keep off this job" choice on ×; building the unzip tool into the file; an iPhone share-sheet backup |
 | Nov 12, 2026 | "Scheduling for" day choice (Today / Tomorrow / date) on Today, so hand-typed jobs can be scheduled for the next day; schedule and History use it |
