@@ -4,7 +4,7 @@
 
 - Live app: https://maynard4307.github.io/crew-scheduler/
 - Repository: https://github.com/maynard4307/crew-scheduler (public; GitHub Pages from `main`, root)
-- Current version: **2026.11.17-a** (shown in the app's top bar; tap it for What's new)
+- Current version: **2026.11.17-b** (shown in the app's top bar; tap it for What's new)
 - Owner: maynard4307 · Primary user: the owner's brother (dispatcher, iPhone + PC)
 
 ## 1. What it's for
@@ -59,19 +59,21 @@ Tabs: **Today · Workers · History · ⚙ Settings** (since 2026.11.11-a; befor
 
 ### Data storage (all on the device)
 
+Every key is also listed in `STORE` at the top of the script with where it goes in a backup / support pack; `SECRET` names the API-key fields that never leave the device. `tests/checks.js` (13c) fails if a new `crew_…` key, a new Settings field or a new setting isn't covered. Rule (owner, Nov 17, 2026): **backups and support packs carry every setting and tick box; only API keys are left out.**
+
 | Key / store | What | In backups? |
 |---|---|---|
 | localStorage `crew_roster` | workers, conflicts, prefers, settings (incl. temp agencies) | Yes |
-| localStorage `crew_tonight` | `day` (the day being scheduled, YYYY-MM-DD; set by Scheduling for, by loading a calendar day, or pinned by `pinDay` when a job is typed in or crews are built), `offAt` (when the off list was last touched), today's jobs, assignments, locks, off list, meets, `drivers` (Make driver: worker id → job id, counts only while locked to that job — `isDriver`), AI review, `histSaved` | No (support pack only) |
+| localStorage `crew_tonight` | `day` (the day being scheduled, YYYY-MM-DD; set by Scheduling for, by loading a calendar day, or pinned by `pinDay` when a job is typed in or crews are built), `offAt` (when the off list was last touched), today's jobs, assignments, locks, off list, meets, `drivers` (Make driver: worker id → job id, counts only while locked to that job — `isDriver`), AI review, `histSaved` | Yes (`today`, since 17-b; on restore it's offered with “Load jobs” unless its day is past) |
 | IndexedDB `crew-scheduler` → `days` | History, one record per date (names copied in) | Yes (merged on restore, newer edit wins) |
 | IndexedDB `kv.histFile` | PC history-file handle (File System Access) | No |
-| localStorage `crew_geo` | address lookup cache (`v2|<query>` → up to 15 results from all services) | No |
+| localStorage `crew_geo` | address lookup cache (`v2|<query>` → up to 15 results from all services) | Support pack only |
 | localStorage `crew_places` | saved spots: street address fixed by hand → coordinates, reused for every later job/worker with that address | Yes (`places`, newer wins on restore) |
-| localStorage `crew_rc`, `crew_rg` | road drive time cache (`"lat,lng>lat,lng"` → [min, mi]); route geometries | No |
+| localStorage `crew_rc`, `crew_rg` | road drive time cache (`"lat,lng>lat,lng"` → [min, mi]); route geometries | `crew_rc` yes (`roadTimes`, merged: only missing entries added); `crew_rg` support pack only |
 | localStorage `crew_history` | History, only when IndexedDB isn't available (fallback) | Yes |
-| localStorage `crew_backup` | when the last backup was saved from this device (`at`), reminder snooze | No |
-| localStorage `crew_ai`, `crew_route` | Claude API key/model; OpenRouteService key | **Never** (device only) |
-| localStorage `crew_jobtext` | plain-English job entry: `on`, `engine` (auto/builtin/gemini/claude/basic), `geminiKey`, `geminiModel` | **Never** (device only; support pack only says on/engine/whether a Gemini key is set) |
+| localStorage `crew_backup` | when the last backup was saved from this device (`at`), reminder snooze | Support pack only |
+| localStorage `crew_ai`, `crew_route` | Claude API `key`, `model`, `autoNotes` (read notes automatically); OpenRouteService `key` | Everything but the keys (`device` in the backup; restored on Replace, this device's keys kept) |
+| localStorage `crew_jobtext` | plain-English job entry: `on`, `engine` (auto/builtin/gemini/claude/basic), `geminiKey`, `geminiModel` | Everything but `geminiKey` (same as above) |
 | localStorage `crew_log`, `crew_lastimport`, `crew_seenver` | support log (300 entries), last import raw text, last seen version | Support pack only |
 
 On the Claude artifact the roster/today also sync through the artifact database (`db` docs `app/roster`, `app/tonight`).
@@ -104,14 +106,14 @@ On the Claude artifact the roster/today also sync through the artifact database 
 - AI: `askClaude`, `aiReadNotes`, `aiReview`, `applySuggestion`
 - Plain-English job entry: `readJobText` (engine order for Automatic: `jtBuiltin` → `jtGemini` → `jtClaude`, falls back to `jtBasic`, the offline regex reader), `jobTextFill` (fills the form fields and requested chips; names matched on the device by `jtPerson`/`jtNameKeys` — full, unique first or unique last name; `formAI` carries don't-send + note to `saveJob`), `rJobTextBox`, `rJobTextSettings`, `jtCfg`
 - Load a support pack in Today → Open job file (`readAnyFile` kind `pack`: the .zip, its `today.json`, or the offline single-JSON pack) → `loadPackJobs` restores jobs exactly (time, trucks, crew, requested/avoid, notes, off list), offers the pack's workers via `restoreRoster`, maps people by id then by name (`today.json` now carries `names`).
-- Backup/support: `rosterBackup`, `readBackup`, `restoreRoster`, `supportPack`, `logEvent`. A backup `.json` opened through Workers → Import list is detected (`asJSON`, `isBackupJSON`) and sent to `restoreRoster`; JSON never goes through the CSV reader (`placesFrom` refuses it). `restoreRoster` also removes leftover junk rows (`isJunkWorker`) from the pre-g bug.
+- Backup/support: `rosterBackup` (version 3: roster, places, history, `today`, `roadTimes`, `device`, `keysLeftOut` flags), `readBackup` (still reads version 2), `restoreRoster(text,{skipToday})`, `deviceSettings`/`restoreDeviceSettings`/`noSecrets`, `supportPack` (+ `deviceStorage`: every other `crew_` key, keys stripped, `keySet` flags), `logEvent`. A backup `.json` opened through Workers → Import list is detected (`asJSON`, `isBackupJSON`) and sent to `restoreRoster`; JSON never goes through the CSV reader (`placesFrom` refuses it). `restoreRoster` also removes leftover junk rows (`isJunkWorker`) from the pre-g bug.
 - Release notes: `APP_VERSION`, `CHANGELOG` (top of the script)
 
 ## 5. How to ship an update
 
 1. Edit `index.html`.
 2. Bump `APP_VERSION` (format `YYYY.MM.DD-letter`) and add an entry at the top of `CHANGELOG` (`added` / `fixed`, plain language for the dispatcher).
-3. Test in a headless browser (Playwright): run `node tests/checks.js` (matching rules on random days, the schedule, History, backups, calendar reading, storage-full, the Nov 16 review fixes, version/doc sync) and add a check there for the feature touched. Mock external APIs (ORS, Claude, Overpass, Nominatim) — they aren't reachable from Claude's workspace.
+3. Test in a headless browser (Playwright): run `node tests/checks.js` (matching rules on random days, the schedule, History, backups (incl. every setting in the backup and support pack, no API keys), calendar reading, storage-full, the Nov 16 review fixes, version/doc sync) and add a check there for the feature touched. Mock external APIs (ORS, Claude, Overpass, Nominatim) — they aren't reachable from Claude's workspace.
 4. Regenerate `CHANGELOG.md` from the `CHANGELOG` array; update this file if rules/architecture changed.
 5. Commit and push to `main` (GitHub Pages updates in 1–2 minutes). Users close/reopen the app; What's new pops up once.
 6. Also republish the Claude artifact (slug `bec01df9-3b49-428f-ad6b-c555570c7da6`) and send a versioned copy `crew-scheduler-v<version>.html` if the owner wants a file.
@@ -120,7 +122,7 @@ Never commit backups, support packs, CSVs or keys (`.gitignore` blocks `*.json`,
 
 ## 6. Troubleshooting
 
-- Ask for **Settings → Help → Having a problem? → Pack & save for support** (.zip). To reproduce a day, open that .zip in **Today → Open job file** (loads its jobs, and its workers if you say so). It has the roster, today, last import (raw calendar text), schedule, issues, 60 days of history, the log, and environment (version, where it runs, whether routing/AI keys are set, cached route counts, last routing error).
+- Ask for **Settings → Help → Having a problem? → Pack & save for support** (.zip). To reproduce a day, open that .zip in **Today → Open job file** (loads its jobs, and its workers if you say so). It has the roster backup (with every setting), today, last import (raw calendar text), schedule, issues, all of History (`history.json`; before 17-b only 60 days), road times and route lines, saved spots, `device-storage.json` (every other stored setting, keys left out), the log, and environment (now also `history`: days, where stored, PC file state) (version, where it runs, whether routing/AI keys are set, cached route counts, last routing error).
 - Road times "not used": check `environment.json` → `routingConfigured`, `routeCached`, `routeLastErr`. OpenRouteService's usage dashboard can lag. A message saying OpenRouteService "turned down the request" means the server answered but refused: the key in that browser is wrong/expired, or the daily limit is used up (Settings → Road drive times → Test; re-paste the key from account.heigit.org). The log has `route-error` entries.
 - Calendar parsing problems: check `last-import.json` raw events against `parseJobTitle`.
 - Workers named `{`, `]`, `name: …`, `lat: …` with no address: a backup `.json` was opened with Import list in a version before 2026.11.09-g. Fix: update, then Restore backup (or Import list) with the same file → Replace.
@@ -166,4 +168,5 @@ Never commit backups, support packs, CSVs or keys (`.gitignore` blocks `*.json`,
 | Nov 16, 2026 | 2026.11.16-b, Justin chose three of the four open items: “Keep off this job” on the Undo message after × (adds the person to that job's `avoid` list; each Don't-send name has a × to undo, `rmAvoid`); JSZip built into the file; backups use the Share sheet on a phone (`shareFile`, only when the pointer is coarse and `navigator.canShare` accepts the file, otherwise the normal download; a cancelled share does not count as a backup). Not yet tried on a real iPhone. Still open: whether the copied schedule should hide home addresses and phones. |
 | Nov 16, 2026 | Second review, then a fix release (2026.11.16-a). Mile limit: a lead past their limit never drives unless placed by hand, but may ride as a worker. Rebuild keeps people where they are unless moving saves more than about 5 minutes each. Forms keep typed text through background redraws. Restore: Merge is the highlighted choice. Ids read from files are cleaned (`cleanId`). History job keys get `#2`, `#3` when a name and time repeat on one day. Left for the owner to decide: whether the copied schedule should include home addresses and phones; a "keep off this job" choice on ×; building the unzip tool into the file; an iPhone share-sheet backup |
 | Nov 17, 2026 | 2026.11.17-a: road time errors name the real reason. Found from the website showing “Couldn't reach OpenRouteService … use the website version” on the website itself: ORS refusals carry no CORS headers, so the browser reports every refusal as a network failure. |
+| Nov 17, 2026 | 2026.11.17-b: backups and support packs carry every setting and tick box, only API keys left out (Justin). Found from the dispatcher's 16-b pack: no road time cache, empty History file, and the AI “read notes automatically” box and plain-English options were in no backup. Backup also carries the day being scheduled (offered on restore) and saved road times. |
 | Nov 12, 2026 | "Scheduling for" day choice (Today / Tomorrow / date) on Today, so hand-typed jobs can be scheduled for the next day; schedule and History use it |

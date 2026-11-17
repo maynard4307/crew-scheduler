@@ -165,9 +165,10 @@ details.hsec>summary{font-weight:600;cursor:pointer;padding:4px 0}
 <script>
 "use strict";
 /* ---------- state ---------- */
-const APP_VERSION="2026.11.17-a";
+const APP_VERSION="2026.11.17-b";
 /* Release notes — newest first. Add an entry here with every update. */
 const CHANGELOG=[
+ {v:"2026.11.17-b",date:"Nov 17, 2026",added:["Save backup file now keeps everything you've set up, not just workers and scheduling rules: every tick box and option in Settings (including the AI assistant and Type jobs in plain English choices), saved road drive times (so a new device doesn't have to look them up again), and the day you're scheduling (jobs, who's off, crews). When you restore it on a new device you're asked whether to load that day's jobs too. API keys are still never saved: paste them again on the new device.","Pack & save for support now has all of History (it had only the last 60 days), the saved road drive times, saved map spots, and the rest of this device's settings, with API keys left out."]},
  {v:"2026.11.17-a",date:"Nov 17, 2026",fixed:["When road drive times fail, the message now says the real reason. Before, it always said “Couldn't reach OpenRouteService… use the website version”, even on the website. Now it tells apart: the key in this browser isn't accepted or today's free limit is used up (with a link to Settings → Road drive times to test or re-paste the key), the device is offline, the service can't be reached, or you're on the shared Claude page. The Test button in Settings gives the same clearer answer."]},
  {v:"2026.11.16-b",date:"Nov 16, 2026",added:["After you take someone off a crew with ×, the message now has a second button: Keep off this job. Tap it and a rebuild won't put that person back on that job today. They can still go to another job.", "A job's “Don't send” names now each have a small × so you can allow that person on the job again.", "On a phone, Save backup file (and the History backup) now opens the Share sheet, so you can text or email the backup to yourself, AirDrop it, or Save to Files. On a computer it still downloads as before.", "The tool that opens .kmz map files and .zip files is now built into the app, so those open with no internet, and the app no longer loads any code from another website."],fixed:["If you close the Share sheet without saving the backup, the app no longer counts it as backed up."]},
  {v:"2026.11.16-a",date:"Nov 16, 2026",added:["Rebuild now keeps people where they already are unless moving someone saves real driving, and a message says who changed jobs. Before, a rebuild could reshuffle people who had already been told where to go.","Taking someone off a crew with × now shows an Undo button for a few seconds, and the ×, 🔒 and tick boxes are bigger and easier to hit on a phone.","When two people on a job have the same first name, the copied schedule adds the last initial (Mike S., Mike T.).","When you restore a backup and already have workers, Merge is now the highlighted button, and the message explains what Merge and Replace each do.","Pop-ups close with the Esc key, and the folded steps and job rows can be reached with the keyboard.","Settings → Backup & restore notes that on an iPhone, Safari and the Home Screen icon each keep their own data."],fixed:["A crew lead could be given a truck on a job past their mile limit: on a short-handed day a far-away lead was pulled in to fill an empty seat and ended up driving the second truck, and the extra truck option didn't check the limit at all. Now a lead past their limit never drives unless you put them there yourself. They may still ride along as a worker.","In the “+ Add / move someone here” menu, the “past limit” note compared minutes with miles, so some leads were marked past their limit when they weren't.","What you were typing could disappear: if the app finished looking up addresses while you were filling in Add a job or Add worker, the form went blank. The form now keeps what you typed. The temp agency boxes and the AI “Anything special today?” box no longer lose text either.","Switching tabs with a half-filled job or worker now asks before throwing it away.","On a phone, the More menu in step 1 ran off the right edge of the screen. It now stays on screen.","Links were dark blue on a dark background in dark mode and hard to read. They're now light blue.","More → Clear crews wiped the crews and locks at once. It now asks first.","Changing Trucks or Per truck on a job before building crews didn't update the counts in step 2.","Two jobs with the same name and time on one day could swap or lose their close-out status in History when the schedule was saved again.","Deleting a worker left an empty “Don't send:” line on jobs and kept them in the off list.","Loading new jobs now clears an old AI review, and applying an old suggestion no longer takes someone off their job.","Backup and spreadsheet file names used the wrong date in the evening. The crews spreadsheet is now named for the day being scheduled.","In plain-English job entry, the basic reader read “at 5” as 5:00p. It now reads it as 5:00a, the same as the Report time box.","Safety: odd characters in the IDs inside a backup or support pack file are now removed when the file is loaded."]},
@@ -244,6 +245,51 @@ let db=null, dbOK=false;
 const saveTimers={}, lastWritten={}, writing={};
 function lsGet(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}}
+/* Everything the app keeps in this browser, and where each piece goes when you save a backup or pack for support.
+   Every localStorage key the app uses MUST be listed here (tests/checks.js fails otherwise).
+   backup: "roster"/"today"/"places"/"history"/"roadTimes" = its own part of the backup file; "device" = copied into the
+   backup's device settings (fields in SECRET left out); false = support pack only (caches, logs, device-only notes).
+   The support pack carries every key: the ones without their own file go into device-storage.json. API keys never leave. */
+const STORE={
+  crew_roster:{backup:"roster",what:"workers, crew rules, all Scheduling rules / Temp agency settings"},
+  crew_tonight:{backup:"today",what:"the day being scheduled: jobs, who's off, crews, locks, drivers, meet spots"},
+  crew_places:{backup:"places",what:"saved spots (addresses fixed by hand)"},
+  crew_history:{backup:"history",what:"History, when IndexedDB isn't available"},
+  crew_rc:{backup:"roadTimes",what:"saved road drive times"},
+  crew_ai:{backup:"device",what:"AI assistant: model, read notes automatically (key left out)"},
+  crew_route:{backup:"device",what:"Road drive times connection (key left out)"},
+  crew_jobtext:{backup:"device",what:"Type jobs in plain English: on/off, engine, Gemini model (key left out)"},
+  crew_rg:{backup:false,what:"saved route lines (map shapes, can be fetched again)"},
+  crew_geo:{backup:false,what:"address lookup cache (free services, can be looked up again)"},
+  crew_backup:{backup:false,what:"when this device last saved a backup, reminder snooze"},
+  crew_log:{backup:false,what:"support log"},
+  crew_lastimport:{backup:false,what:"raw text of the last calendar import"},
+  crew_seenver:{backup:false,what:"last version this device showed What's new for"},
+};
+const SECRET={crew_ai:["key"],crew_route:["key"],crew_jobtext:["geminiKey"]};   // API keys: never in a backup or support pack
+function noSecrets(k,v){
+  if(!v||typeof v!=="object"||Array.isArray(v)||!SECRET[k])return v;
+  const o={...v};for(const f of SECRET[k])if(f in o){delete o[f];o[f+"Set"]=true}
+  return o;
+}
+/* Device settings for the backup file: every "device" key, without its API key. */
+function deviceSettings(){
+  const out={};
+  for(const [k,d] of Object.entries(STORE))if(d.backup==="device"){const v=lsGet(k);if(v&&typeof v==="object"){const o=noSecrets(k,v);for(const f of SECRET[k]||[])delete o[f+"Set"];if(Object.keys(o).length)out[k]=o}}
+  return out;
+}
+/* Put device settings from a backup back, keeping this device's own API keys. */
+function restoreDeviceSettings(dev){
+  if(!dev||typeof dev!=="object")return 0;let n=0;
+  for(const [k,v] of Object.entries(dev)){
+    if(!STORE[k]||STORE[k].backup!=="device"||!v||typeof v!=="object"||Array.isArray(v))continue;
+    const mine=lsGet(k)||{},o={...v};
+    for(const f of SECRET[k]||[]){delete o[f];delete o[f+"Set"]}
+    for(const f of Object.keys(o))if(o[f]!==null&&typeof o[f]==="object")delete o[f];   // settings here are plain values
+    lsSet(k,{...mine,...o});n++;
+  }
+  return n;
+}
 function setSave(t){const el=$("#saveState");el.textContent=saveFailed?"⚠ NOT SAVED":t;el.style.color=saveFailed?"var(--bad)":""}
 /* The browser gives each site a few MB. When it is full a save fails: first drop what can be looked up again
    (address lookups, road times, the last import, the log), then try once more. If it still fails, say so loudly —
@@ -1840,7 +1886,7 @@ function rSettings(){
 }
 function rBackupCard(){
   return `<div class="card" id="backupCard"><h2>Backup &amp; restore</h2>
-  <p class="muted small">Saves every crew lead and worker (names, addresses, locations, phones, lead status), the can't-work-together and work-well-together lists, your settings, saved map spots and all History. Restore it on another phone or computer, or into a newer version of this tool.</p>
+  <p class="muted small">Saves every crew lead and worker (names, addresses, locations, phones, lead status), the can't-work-together and work-well-together lists, every setting and tick box (scheduling rules, temp agencies, AI and plain-English options), saved map spots, saved road drive times, the day you're scheduling (jobs, who's off, crews) and all History. Your API keys are never saved in it: paste them again on a new device. Restore it on another phone or computer, or into a newer version of this tool.</p>
   ${(()=>{const b=backupInfo();return roster.workers.length?`<div class="${b.at&&!backupDue()?"good":"warn"}" style="margin-bottom:8px">${b.at?`Last backup: ${esc(tLabel(b.at))}`:"No backup saved from this device yet."}</div>`:""})()}
   <div class="row"><button class="b p" data-act="saveRoster" ${roster.workers.length?"":"disabled"}>Save backup file</button><button class="b" data-act="restoreRoster">Restore backup</button>${moreMenu([`<button class="b" data-act="copyRoster" ${roster.workers.length?"":"disabled"}>Copy backup as text</button>`,`<button class="b" data-act="workersCsv" ${roster.workers.length?"":"disabled"}>Export workers as spreadsheet (CSV)</button>`])}</div>
   ${roster.workers.length?`<p class="small muted" style="margin-bottom:0">Tip: save a backup whenever you add or change workers. Email it to yourself or keep it in Google Drive so it's never lost. On a phone, Save backup file opens the Share sheet: send it to yourself, or pick Save to Files. After saving, check once that the file really is there.</p>`:""}
@@ -2673,7 +2719,15 @@ function showWhatsNew(sinceV){
   $("#appVer").classList.remove("new");
 }
 /* ---------- support pack ---------- */
+/* Every crew_ key in this browser that doesn't get its own file in the pack, API keys taken out. */
+const PACK_OWN_FILE=["crew_roster","crew_tonight","crew_places","crew_history","crew_rc","crew_rg","crew_geo","crew_log","crew_lastimport"];
+function deviceStorage(){
+  const out={};let keys=[];try{keys=Object.keys(localStorage).filter(k=>k.startsWith("crew_")&&!PACK_OWN_FILE.includes(k)).sort()}catch(e){}
+  for(const k of keys){let v=null;try{v=localStorage.getItem(k)}catch(e){}let j;try{j=JSON.parse(v)}catch(e){j=v}out[k]=noSecrets(k,j)}
+  return out;
+}
 async function supportPack(){
+  for(let i=0;i<30&&!histLoaded;i++)await new Promise(r=>setTimeout(r,100));   // History loads from IndexedDB at start
   const now=new Date(),stamp=now.toISOString().slice(0,16).replace(/[T:]/g,"-");
   let lastImport=null;try{lastImport=JSON.parse(localStorage.getItem("crew_lastimport"))}catch(e){}
   let geo={};try{geo=JSON.parse(localStorage.getItem("crew_geo"))||{}}catch(e){}
@@ -2683,13 +2737,13 @@ async function supportPack(){
   const env={appVersion:APP_VERSION,savedSpots:Object.keys(places).length,censusReachable:!censusDown,packedAt:now.toISOString(),timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,userAgent:navigator.userAgent,
     screen:`${screen.width}x${screen.height} @${devicePixelRatio}x`,where:location.protocol==="file:"?"local file":location.host||"claude page",
     storage:dbOK?"Claude account":"this device",localStorage:ls,saveFailed,storagePersisted,lastBackup:backupInfo().at||null,storageChars:(()=>{try{return Object.fromEntries(Object.keys(localStorage).filter(k=>k.startsWith("crew_")).map(k=>[k,localStorage.getItem(k).length]))}catch(e){return null}})(),online:navigator.onLine,jszip:!!window.JSZip,
-    aiConfigured:aiReady(),jobText:{on:jtOn(),engine:jtCfg().engine||"auto",gemini:!!jtCfg().geminiKey},routingConfigured:routeReady(),routeCached:Object.keys(RC).length,routeGeoms:Object.keys(RG).length,routeLastErr,aiModel:aiCfg().model||"",counts:{workers:roster.workers.length,leads:roster.workers.filter(w=>w.lead).length,jobs:tonight.jobs.length,jobsWithoutLocation:tonight.jobs.filter(j=>!hasLoc(j)).length,workersWithoutLocation:roster.workers.filter(w=>!hasLoc(w)).length,offToday:tonight.off.length,conflicts:roster.conflicts.length,prefers:roster.prefers.length,cachedLookups:Object.keys(geo).length}};
+    aiConfigured:aiReady(),jobText:{on:jtOn(),engine:jtCfg().engine||"auto",gemini:!!jtCfg().geminiKey},routingConfigured:routeReady(),routeCached:Object.keys(RC).length,routeGeoms:Object.keys(RG).length,routeLastErr,aiModel:aiCfg().model||"",history:{loaded:histLoaded,storedIn:histMode,days:HIST.size,first:[...HIST.keys()].sort()[0]||null,last:[...HIST.keys()].sort().pop()||null,pcFile:fileState,pcFileName:fileHandle&&fileHandle.name||null,pcFileLast:fileLast},keysLeftOut:"routing key, Claude key and Gemini key are never packed",counts:{workers:roster.workers.length,leads:roster.workers.filter(w=>w.lead).length,jobs:tonight.jobs.length,jobsWithoutLocation:tonight.jobs.filter(j=>!hasLoc(j)).length,workersWithoutLocation:roster.workers.filter(w=>!hasLoc(w)).length,offToday:tonight.off.length,conflicts:roster.conflicts.length,prefers:roster.prefers.length,cachedLookups:Object.keys(geo).length}};
   const readme=`Crew Scheduler — support pack
 Made ${now.toLocaleString()} · app version ${APP_VERSION}
 
 What's inside:
   roster-backup.json  Crew leads, workers, crew rules and settings. Can be restored with Settings → Restore backup.
-  history-last-60-days.json  Saved days and close-outs from the last 60 days.
+  history.json        Every saved day and close-out (History is kept forever).
   today.json          Today's jobs (with the calendar titles/notes), who's off, crews, locks, requested people, meet spots.
   last-import.json    The raw calendar events (or pasted text) from the last import.
   schedule.txt        The schedule exactly as "Copy schedule" makes it.
@@ -2698,13 +2752,19 @@ What's inside:
   log.json            Recent errors and actions on this device.
   environment.json    Browser, device and app details.
   address-lookups.json  Cached address → map location lookups.
+  road-times.json     Saved road drive times and route lines (so a day can be rebuilt with the same times).
+  saved-spots.json    Addresses fixed by hand → map location.
+  device-storage.json Everything else this browser keeps for the app: AI / plain-English / road-time settings
+                      (API keys left out), backup reminder, What's new seen.
+
+API keys (road drive times, Claude, Gemini) are never put in a pack or a backup.
 
 This contains names, addresses and phone numbers. Only share it with someone you trust to help.`;
   const files={
     "README.txt":readme,
     "roster-backup.json":rosterBackup(),
     "today.json":JSON.stringify({...tonight,names:Object.fromEntries(roster.workers.map(w=>[w.id,w.name]))},null,1),
-    "history-last-60-days.json":JSON.stringify([...HIST.values()].filter(r=>r.date>=dayKey(new Date(Date.now()-60*864e5))),null,1),
+    "history.json":JSON.stringify([...HIST.values()].sort((a,b)=>a.date.localeCompare(b.date)),null,1),
     "last-import.json":JSON.stringify(lastImport,null,1),
     "schedule.txt":tonight.assign?scheduleText():"Crews not built yet.",
     "crews.csv":tonight.assign?scheduleCSV():"",
@@ -2712,6 +2772,9 @@ This contains names, addresses and phone numbers. Only share it with someone you
     "log.json":JSON.stringify(LOG,null,1),
     "environment.json":JSON.stringify(env,null,1),
     "address-lookups.json":JSON.stringify(geo,null,1),
+    "road-times.json":JSON.stringify({times:RC,routes:RG},null,1),
+    "saved-spots.json":JSON.stringify(places,null,1),
+    "device-storage.json":JSON.stringify(deviceStorage(),null,1),
   };
   logEvent("support-pack","Packed for support");
   if(window.JSZip){
@@ -2727,9 +2790,14 @@ This contains names, addresses and phone numbers. Only share it with someone you
 }
 /* ---------- roster backup / restore ---------- */
 function rosterBackup(){
-  return JSON.stringify({app:"crew-scheduler",kind:"roster",version:2,exportedAt:new Date().toISOString(),
+  // version 3 (2026.11.17-b): also the day being scheduled, saved road drive times and this device's own settings.
+  // API keys are never written (SECRET); keysLeftOut only says which ones the restoring device must paste again.
+  return JSON.stringify({app:"crew-scheduler",kind:"roster",version:3,appVersion:APP_VERSION,exportedAt:new Date().toISOString(),
     roster:{workers:roster.workers,conflicts:roster.conflicts,prefers:roster.prefers,settings:roster.settings},places,
-    history:{days:[...HIST.values()].sort((a,b)=>a.date.localeCompare(b.date))}},null,1);
+    history:{days:[...HIST.values()].sort((a,b)=>a.date.localeCompare(b.date))},
+    today:{...tonight,names:Object.fromEntries(roster.workers.map(w=>[w.id,w.name]))},
+    roadTimes:RC,device:deviceSettings(),
+    keysLeftOut:{routing:routeReady(),claude:aiReady(),gemini:!!jtCfg().geminiKey}},null,1);
 }
 function workersCSV(){
   const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
@@ -2746,13 +2814,16 @@ function readBackup(text){
     phone:String(w.phone||"").slice(0,40),lead:!!w.lead,active:w.active!==false,maxMiles:+w.maxMiles>0?+w.maxMiles:0,geoNote:w.geoNote?String(w.geoNote).slice(0,200):"",geoLabel:w.geoLabel?String(w.geoLabel).slice(0,300):""});
   const pairs=a=>Array.isArray(a)?a.filter(p=>Array.isArray(p)&&p.length===2).map(p=>[cleanId(p[0]),cleanId(p[1])]).filter(p=>p[0]&&p[1]):[];
   return {workers:r.workers.map(clean),conflicts:pairs(r.conflicts),prefers:pairs(r.prefers),settings:r.settings&&typeof r.settings==="object"?r.settings:null,
-    places:Object.fromEntries(Object.entries(d.places&&typeof d.places==="object"?d.places:{}).filter(([k,v])=>v&&isFinite(+v.lat)&&isFinite(+v.lng)&&Math.abs(+v.lat)<=90&&Math.abs(+v.lng)<=180).map(([k,v])=>[String(k).slice(0,200),{lat:+v.lat,lng:+v.lng,name:String(v.name||"").slice(0,80),at:String(v.at||"")}])),historyDays:d.history&&Array.isArray(d.history.days)?d.history.days:[]};
+    places:Object.fromEntries(Object.entries(d.places&&typeof d.places==="object"?d.places:{}).filter(([k,v])=>v&&isFinite(+v.lat)&&isFinite(+v.lng)&&Math.abs(+v.lat)<=90&&Math.abs(+v.lng)<=180).map(([k,v])=>[String(k).slice(0,200),{lat:+v.lat,lng:+v.lng,name:String(v.name||"").slice(0,80),at:String(v.at||"")}])),historyDays:d.history&&Array.isArray(d.history.days)?d.history.days:[],
+    today:d.today&&typeof d.today==="object"&&Array.isArray(d.today.jobs)?d.today:null,
+    roadTimes:Object.fromEntries(Object.entries(d.roadTimes&&typeof d.roadTimes==="object"?d.roadTimes:{}).filter(([k,v])=>/^-?[\d.]+,-?[\d.]+>-?[\d.]+,-?[\d.]+$/.test(k)&&Array.isArray(v)&&v.length===2&&v.every(x=>typeof x==="number"&&isFinite(x)&&x>=0)).slice(0,8000)),
+    device:d.device&&typeof d.device==="object"?d.device:null};
 }
 /* Rows left behind when a backup .json was opened with "Import list (CSV)" before 2026.11.09-g:
    names like "{", "]", "name: Curtis danley", "lat: 35.03", "roster: {". */
 const JUNK_ROW=/^[\[\]{}(),\s]*$|^"?[A-Za-z]+"?\s*:(\s|$)/;
 const isJunkWorker=w=>JUNK_ROW.test(String(w.name||"").trim())&&!w.address&&!hasLoc(w);
-async function restoreRoster(text){
+async function restoreRoster(text,opt={}){
   let b;try{b=readBackup(text)}catch(e){logEvent("restore-error",e.message);toast(e.message);return}
   const junk=roster.workers.filter(isJunkWorker);
   if(junk.length){
@@ -2767,6 +2838,7 @@ async function restoreRoster(text){
   if(mode){
     roster.workers=b.workers;roster.conflicts=b.conflicts;roster.prefers=b.prefers;
     if(b.settings)roster.settings={...DEFAULT_SETTINGS,...b.settings};
+    if(restoreDeviceSettings(b.device))logEvent("restore","device settings restored (API keys kept from this device)");
     tonight.assign=null;tonight.locks={};
   } else {
     const idMap=new Map();let added=0,updated=0;
@@ -2780,10 +2852,16 @@ async function restoreRoster(text){
     toast(`${added} added, ${updated} updated`);
   }
   let pn=0;for(const [k,v] of Object.entries(b.places||{})){if(!places[k]||String(places[k].at||"")<v.at){places[k]=v;pn++}}if(pn)lsSet("crew_places",places);
+  let rn=0;for(const [k,v] of Object.entries(b.roadTimes||{}))if(!RC[k]){RC[k]=v;rn++}if(rn)rcSave();
   const hn=mergeHistory(b.historyDays);if(hn)setTimeout(()=>toast(`Also restored ${hn} day(s) of history`),2700);
-  logEvent("restore",(mode?"replace":"merge")+` ${b.workers.length} workers, ${hn} history days`);
+  logEvent("restore",(mode?"replace":"merge")+` ${b.workers.length} workers, ${hn} history days, ${rn} road times`);
   normalize();save("roster");save("tonight");render();
   if(mode)toast(`Restored ${b.workers.length} worker${b.workers.length===1?"":"s"} and their crew rules`);
+  // the backup's day being scheduled: offered only when it isn't over yet (an old day's jobs would just be in the way)
+  const td=b.today;
+  if(!opt.skipToday&&td&&td.jobs.length&&!(isDayKey(td.day)&&td.day<dayKey(new Date()))&&
+     await ask(`This backup also has ${td.jobs.length} job${td.jobs.length===1?"":"s"}${isDayKey(td.day)?" for "+dayWord(td.day):""}. Load them onto Today?`,"Load jobs"))
+    try{await loadPackJobs(JSON.stringify(td),null,"backup")}catch(e){toast(e.message)}
 }
 function restoreDialog(){
   const bg=document.createElement("div");bg.className="modalbg";
@@ -2808,7 +2886,7 @@ async function loadPackJobs(text,rosterText,source){
   if(rb&&rb.workers.length){
     const r=await ask(`This pack also has ${rb.workers.length} worker${rb.workers.length===1?"":"s"} and crew rules. Load them too?`,"Load workers too","Jobs only");
     if(r===null)return;
-    if(r)await restoreRoster(rosterText);
+    if(r)await restoreRoster(rosterText,{skipToday:true});
   }
   if(tonight.jobs.length&&!await ask(`Replace today's ${tonight.jobs.length} job(s) with the ${d.jobs.length} from this pack?`,"Replace"))return;
   const names=d.names&&typeof d.names==="object"?d.names:{};

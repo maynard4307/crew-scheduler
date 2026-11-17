@@ -2,6 +2,12 @@
 
 Tap the version number at the top of the app to see this inside Crew Scheduler.
 
+## 2026.11.17-b — Nov 17, 2026
+
+**New**
+- Save backup file now keeps everything you've set up, not just workers and scheduling rules: every tick box and option in Settings (including the AI assistant and Type jobs in plain English choices), saved road drive times (so a new device doesn't have to look them up again), and the day you're scheduling (jobs, who's off, crews). When you restore it on a new device you're asked whether to load that day's jobs too. API keys are still never saved: paste them again on the new device.
+- Pack & save for support now has all of History (it had only the last 60 days), the saved road drive times, saved map spots, and the rest of this device's settings, with API keys left out.
+
 ## 2026.11.17-a — Nov 17, 2026
 
 **Fixed**

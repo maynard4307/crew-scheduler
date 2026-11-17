@@ -206,7 +206,10 @@ END:VCALENDAR`;
   const bak=await p.evaluate(async()=>{localStorage.setItem("crew_ai",'{"key":"SECRETKEY1"}');localStorage.setItem("crew_route",'{"key":"SECRETKEY2"}');localStorage.setItem("crew_jobtext",'{"geminiKey":"SECRETKEY3"}');solve();await saveDayToHistory(true);roster.workers[0].phone="910-555-0100";placeSave("412 Oak St, Raeford, NC",35,-79,"x");return rosterBackup()});
   ok(!/SECRETKEY/.test(bak),'backup holds no keys');
   const p2=await open();await closeModalIfAny(p2);
-  await p2.evaluate(t=>restoreRoster(t),bak);await p2.waitForTimeout(300);
+  p2.evaluate(t=>restoreRoster(t),bak);await p2.locator('.modalbg [data-r=o]',{hasText:'Load jobs'}).waitFor();
+  ok(/This backup also has 7 jobs/.test(await p2.locator('.modalbg').innerText()),'restore offers the backup\'s jobs');
+  await p2.locator('.modalbg [data-r=c]').click();await p2.waitForTimeout(300);
+  ok(await p2.evaluate(()=>tonight.jobs.length)===0,'Cancel leaves Today empty');
   r=await p2.evaluate(()=>({n:roster.workers.length,leads:roster.workers.filter(w=>w.lead).length,conf:roster.conflicts.length,pref:roster.prefers.length,phone:roster.workers[0].phone,hist:HIST.size,places:Object.keys(places).length}));
   ok(r.n===16&&r.leads===8&&r.conf===2&&r.pref===1&&r.phone==="910-555-0100"&&r.hist===1&&r.places===1,'backup restores workers, rules, History and saved spots',r);
   await p2.evaluate(()=>{tab="workers";render()});
@@ -232,7 +235,7 @@ END:VCALENDAR`;
   r=await p.evaluate(()=>{roster.settings.agencies=[];render();return {ph:document.querySelectorAll('#step3 .mem').length,warn:[...document.querySelectorAll('#step3 .warn')].map(e=>e.innerText).join('|')}});
   ok(/Add a temp agency/.test(r.warn),'setting on with no agency: asks to add one',r.warn);
   const bak2=await p.evaluate(()=>{roster.settings.agencies=[{id:"a1",name:"Labor Plus",phone:"910",address:"x",lat:35,lng:-79}];return rosterBackup()});
-  const p4=await open();await closeModalIfAny(p4);await p4.evaluate(t=>restoreRoster(t),bak2);await p4.waitForTimeout(300);
+  const p4=await open();await closeModalIfAny(p4);await p4.evaluate(t=>{restoreRoster(t)},bak2);await p4.waitForTimeout(300);
   ok(await p4.evaluate(()=>S().tempAgency===true&&S().agencies.length===1&&S().agencies[0].name==="Labor Plus"),'temp agencies come back with a backup');
   ok(p.errs.length+p4.errs.length===0,'no script errors (temp agency)',[p.errs,p4.errs]);
 
@@ -348,6 +351,76 @@ END:VCALENDAR`;
   r=await p.evaluate(async()=>{let shared=0,clicked=0;navigator.canShare=()=>true;navigator.share=async()=>{shared++};const oc=HTMLAnchorElement.prototype.click;HTMLAnchorElement.prototype.click=function(){clicked++};await download("crew-roster-x.json","{}",{share:true});HTMLAnchorElement.prototype.click=oc;return {shared,clicked,coarse:matchMedia("(pointer:coarse)").matches}});
   ok(r.shared===0&&r.clicked===1,'on a computer the backup still downloads',r);
   ok(p.errs.length+pS.errs.length===0,'no script errors (16-b)',[p.errs,pS.errs]);await pS.context().close();
+
+  // ---------- 13c. backup and support pack carry every setting, never an API key (Nov 17-b) ----------
+  // Fails when a new localStorage key, setting or Settings field is added without deciding where it goes in
+  // the backup / support pack (STORE in index.html, or the SETTINGS_FIELDS map below).
+  {
+    const fs=require('fs');const src=fs.readFileSync(path.resolve(__dirname,'..','index.html'),'utf8');
+    const used=[...new Set(src.match(/crew_[a-z_]+/g))].filter(k=>k!=='crew_t'&&k!=='crew_');
+    const pS=await open();await closeModalIfAny(pS);
+    const store=await pS.evaluate(()=>STORE);
+    ok(used.every(k=>store[k]),'every localStorage key the app uses is listed in STORE (backup/pack decision made)',used.filter(k=>!store[k]));
+    // every field on the Settings tab is a scheduling setting (roster.settings) or a known device setting
+    const SETTINGS_FIELDS={aiModel:'crew_ai.model',aiAuto:'crew_ai.autoNotes',jtOn:'crew_jobtext.on',jtEngine:'crew_jobtext.engine',jtModel:'crew_jobtext.geminiModel',routeKey:'KEY',aiKey:'KEY',jtKey:'KEY'};
+    r=await pS.evaluate(()=>{loadSample();roster.settings.tempAgency=true;roster.settings.agencies=[{id:"ag1",name:"Labor Co",address:"1 Main St",phone:"910",note:"n",lat:35,lng:-79,geoLabel:""}];save("roster");tab="settings";render();
+      document.querySelectorAll('details').forEach(d=>d.open=true);
+      return [...document.querySelectorAll('#app input,#app select,#app textarea')].map(e=>({id:e.id,set:e.dataset.set||'',agf:e.dataset.agf||'',type:e.type}))});
+    const unknown=r.filter(f=>f.set?false:f.agf?false:!SETTINGS_FIELDS[f.id]);
+    ok(!unknown.length,'every Settings field is saved somewhere the backup includes (add new ones to SETTINGS_FIELDS)',unknown);
+    const dflt=await pS.evaluate(()=>Object.keys(DEFAULT_SETTINGS));
+    ok(r.filter(f=>f.set).every(f=>dflt.includes(f.set)),'every Scheduling-rules field has a default in DEFAULT_SETTINGS',r.filter(f=>f.set&&!dflt.includes(f.set)));
+    // set every setting to a non-default value, fill every device setting (plus a made-up future field), then back up
+    const bk=await pS.evaluate(async()=>{
+      for(const [k,v] of Object.entries(DEFAULT_SETTINGS))roster.settings[k]=typeof v==="boolean"?!v:typeof v==="number"?v+3:v;
+      save("roster");
+      lsSet("crew_ai",{key:"SECRETAI",model:"claude-haiku-5-5",autoNotes:true,futureOption:"x1"});
+      lsSet("crew_route",{key:"SECRETORS",futureOption:"x2"});
+      lsSet("crew_jobtext",{on:true,engine:"gemini",geminiKey:"SECRETGEM",geminiModel:"gemini-x",futureOption:"x3"});
+      RC["35,-79>35.1,-79.1"]=[12,9];rcSave();RG["35,-79>35.1,-79.1"]={pts:[[35,-79]],min:12,mi:9};rcSave();
+      placeSave("412 Oak St, Raeford, NC",35,-79,"x");
+      tonight.day=dayKey(new Date());solve();await saveDayToHistory(true);
+      await histPut({date:"2025-01-02",jobs:[]});   // an old day: the pack must not drop it
+      const text=rosterBackup();
+      let packed=null;const realDl=download;download=async(name,blob)=>{packed={name,blob}};await supportPack();download=realDl;
+      const zip=await JSZip.loadAsync(packed.blob);const files={};for(const f of Object.values(zip.files))if(!f.dir)files[f.name.split("/").pop()]=await f.async("string");
+      const ls=Object.fromEntries(Object.keys(localStorage).filter(k=>k.startsWith("crew_")).map(k=>[k,localStorage.getItem(k)]));
+      return {text,files,ls,settings:roster.settings,jobs:tonight.jobs.length,own:PACK_OWN_FILE,histDays:HIST.size}});
+    const all=bk.text+Object.values(bk.files).join('');
+    ok(!/SECRET(AI|ORS|GEM)/.test(all),'no API key in the backup or the support pack');
+    const B=JSON.parse(bk.text);
+    ok(JSON.stringify(B.roster.settings)===JSON.stringify(bk.settings),'backup has every scheduling setting and tick box as set');
+    ok(B.device.crew_ai&&B.device.crew_ai.model==='claude-haiku-5-5'&&B.device.crew_ai.autoNotes===true&&B.device.crew_ai.futureOption==='x1','backup has AI assistant options (and any new field there)',B.device);
+    ok(B.device.crew_jobtext&&B.device.crew_jobtext.on===true&&B.device.crew_jobtext.engine==='gemini'&&B.device.crew_jobtext.geminiModel==='gemini-x'&&B.device.crew_jobtext.futureOption==='x3','backup has plain-English job options',B.device);
+    ok(B.device.crew_route&&B.device.crew_route.futureOption==='x2'&&!('key' in B.device.crew_route),'backup has road-time options without the key',B.device);
+    ok(B.roadTimes&&B.roadTimes["35,-79>35.1,-79.1"],'backup has saved road drive times');
+    ok(B.today&&B.today.jobs.length===bk.jobs&&B.today.assign,'backup has the day being scheduled with its crews');
+    ok(B.history.days.length===bk.histDays&&Object.keys(B.places).length===1,'backup has all History and saved spots');
+    // every STORE key that belongs in a backup is in it
+    const part={roster:'roster',today:'today',places:'places',history:'history',roadTimes:'roadTimes'};
+    const missing=Object.entries(store).filter(([k,d])=>d.backup&&(d.backup==='device'?false:!B[part[d.backup]]));
+    ok(!missing.length,'every STORE backup part is in the backup file',missing);
+    // support pack: every crew_ key in this browser is in it (own file or device-storage.json)
+    const dev=JSON.parse(bk.files['device-storage.json']);
+    const notPacked=Object.keys(bk.ls).filter(k=>!bk.own.includes(k)&&!(k in dev));
+    ok(!notPacked.length,'support pack has every crew_ key from this browser',notPacked);
+    ok(dev.crew_ai&&dev.crew_ai.autoNotes===true&&dev.crew_ai.keySet===true&&dev.crew_jobtext.geminiKeySet===true,'support pack says which keys are set, without the keys',dev);
+    ok(JSON.parse(bk.files['history.json']).length===bk.histDays&&JSON.parse(bk.files['history.json']).some(d=>d.date==='2025-01-02'),'support pack has all of History, not just 60 days');
+    ok(JSON.parse(bk.files['road-times.json']).times["35,-79>35.1,-79.1"]&&Object.keys(JSON.parse(bk.files['saved-spots.json'])).length===1,'support pack has road times and saved spots');
+    // restore on a new device: settings, device options and road times come back, keys stay this device's own
+    const pN=await open();await closeModalIfAny(pN);
+    await pN.evaluate(()=>lsSet("crew_ai",{key:"MYOWNKEY"}));
+    pN.evaluate(t=>restoreRoster(t),bk.text);
+    await pN.locator('.modalbg [data-r=o]',{hasText:'Load jobs'}).click();await pN.waitForTimeout(300);
+    r=await pN.evaluate(()=>({settings:roster.settings,ai:lsGet("crew_ai"),jt:lsGet("crew_jobtext"),rc:RC["35,-79>35.1,-79.1"],jobs:tonight.jobs.length,hist:HIST.size}));
+    ok(JSON.stringify(r.settings)===JSON.stringify(bk.settings),'restore brings back every scheduling setting and tick box',r.settings);
+    ok(r.ai.key==='MYOWNKEY'&&r.ai.model==='claude-haiku-5-5'&&r.ai.autoNotes===true,'restore brings back AI options and keeps this device\'s key',r.ai);
+    ok(r.jt.on===true&&r.jt.engine==='gemini'&&!r.jt.geminiKey,'restore brings back plain-English options, no key',r.jt);
+    ok(r.rc&&r.rc[0]===12,'restore brings back saved road drive times');
+    ok(r.jobs===bk.jobs&&r.hist===bk.histDays,'restore offers and loads the day\'s jobs, and all History',r);
+    ok(pS.errs.length+pN.errs.length===0,'no script errors (backup/pack completeness)',[pS.errs,pN.errs]);
+    await pS.context().close();await pN.context().close();
+  }
 
   // ---------- 13b. road time errors say the real reason (Nov 17) ----------
   // ORS refusals (bad key, limit) arrive without CORS headers, so the browser's fetch fails (simulated by aborting the POST)
