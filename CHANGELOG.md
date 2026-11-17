@@ -2,6 +2,11 @@
 
 Tap the version number at the top of the app to see this inside Crew Scheduler.
 
+## 2026.11.17-a — Nov 17, 2026
+
+**Fixed**
+- When road drive times fail, the message now says the real reason. Before, it always said “Couldn't reach OpenRouteService… use the website version”, even on the website. Now it tells apart: the key in this browser isn't accepted or today's free limit is used up (with a link to Settings → Road drive times to test or re-paste the key), the device is offline, the service can't be reached, or you're on the shared Claude page. The Test button in Settings gives the same clearer answer.
+
 ## 2026.11.16-b — Nov 16, 2026
 
 **New**
