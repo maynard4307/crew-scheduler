@@ -165,9 +165,10 @@ details.hsec>summary{font-weight:600;cursor:pointer;padding:4px 0}
 <script>
 "use strict";
 /* ---------- state ---------- */
-const APP_VERSION="2026.11.16-b";
+const APP_VERSION="2026.11.17-a";
 /* Release notes — newest first. Add an entry here with every update. */
 const CHANGELOG=[
+ {v:"2026.11.17-a",date:"Nov 17, 2026",fixed:["When road drive times fail, the message now says the real reason. Before, it always said “Couldn't reach OpenRouteService… use the website version”, even on the website. Now it tells apart: the key in this browser isn't accepted or today's free limit is used up (with a link to Settings → Road drive times to test or re-paste the key), the device is offline, the service can't be reached, or you're on the shared Claude page. The Test button in Settings gives the same clearer answer."]},
  {v:"2026.11.16-b",date:"Nov 16, 2026",added:["After you take someone off a crew with ×, the message now has a second button: Keep off this job. Tap it and a rebuild won't put that person back on that job today. They can still go to another job.", "A job's “Don't send” names now each have a small × so you can allow that person on the job again.", "On a phone, Save backup file (and the History backup) now opens the Share sheet, so you can text or email the backup to yourself, AirDrop it, or Save to Files. On a computer it still downloads as before.", "The tool that opens .kmz map files and .zip files is now built into the app, so those open with no internet, and the app no longer loads any code from another website."],fixed:["If you close the Share sheet without saving the backup, the app no longer counts it as backed up."]},
  {v:"2026.11.16-a",date:"Nov 16, 2026",added:["Rebuild now keeps people where they already are unless moving someone saves real driving, and a message says who changed jobs. Before, a rebuild could reshuffle people who had already been told where to go.","Taking someone off a crew with × now shows an Undo button for a few seconds, and the ×, 🔒 and tick boxes are bigger and easier to hit on a phone.","When two people on a job have the same first name, the copied schedule adds the last initial (Mike S., Mike T.).","When you restore a backup and already have workers, Merge is now the highlighted button, and the message explains what Merge and Replace each do.","Pop-ups close with the Esc key, and the folded steps and job rows can be reached with the keyboard.","Settings → Backup & restore notes that on an iPhone, Safari and the Home Screen icon each keep their own data."],fixed:["A crew lead could be given a truck on a job past their mile limit: on a short-handed day a far-away lead was pulled in to fill an empty seat and ended up driving the second truck, and the extra truck option didn't check the limit at all. Now a lead past their limit never drives unless you put them there yourself. They may still ride along as a worker.","In the “+ Add / move someone here” menu, the “past limit” note compared minutes with miles, so some leads were marked past their limit when they weren't.","What you were typing could disappear: if the app finished looking up addresses while you were filling in Add a job or Add worker, the form went blank. The form now keeps what you typed. The temp agency boxes and the AI “Anything special today?” box no longer lose text either.","Switching tabs with a half-filled job or worker now asks before throwing it away.","On a phone, the More menu in step 1 ran off the right edge of the screen. It now stays on screen.","Links were dark blue on a dark background in dark mode and hard to read. They're now light blue.","More → Clear crews wiped the crews and locks at once. It now asks first.","Changing Trucks or Per truck on a job before building crews didn't update the counts in step 2.","Two jobs with the same name and time on one day could swap or lose their close-out status in History when the schedule was saved again.","Deleting a worker left an empty “Don't send:” line on jobs and kept them in the off list.","Loading new jobs now clears an old AI review, and applying an old suggestion no longer takes someone off their job.","Backup and spreadsheet file names used the wrong date in the evening. The crews spreadsheet is now named for the day being scheduled.","In plain-English job entry, the basic reader read “at 5” as 5:00p. It now reads it as 5:00a, the same as the Report time box.","Safety: odd characters in the IDs inside a backup or support pack file are now removed when the file is loaded."]},
  {v:"2026.11.15-a",date:"Nov 15, 2026",added:["New Temp agency setting (Settings → Temp agency). Add one or more temp agencies with their name, phone, address and a note. Off until you turn it on.","When there aren't enough workers, the app now says so: step 2 shows how many worker spots there are to fill and how many people are available, and after Build crews a note lists how many workers each job is short. The copied schedule ends with a “SHORT-HANDED” list. If the temp agency setting is off, it offers to turn it on.","With the temp agency setting on, open worker spots show as “Temp worker” on the crews, the copied schedule and the CSV, meeting the crew at the job before report time. The app suggests the agency closest to each job and lists who to call and how many temps for which job. Temps only fill worker spots: every truck still needs one of your crew leads.","History notes how many temp workers a job used and from which agency."]},
@@ -938,7 +939,7 @@ async function ors(path,body){
   const c=routeCfg();if(!c.key)throw new Error("nokey");
   let r;
   try{r=await fetch("https://api.openrouteservice.org"+path,{method:"POST",headers:{"Authorization":c.key,"Content-Type":"application/json","Accept":"application/json, application/geo+json"},body:JSON.stringify(body)})}
-  catch(e){throw new Error("offline")}
+  catch(e){throw new Error(await orsWhyFailed())}
   let j=null;try{j=await r.json()}catch(e){}
   if(!r.ok){
     const m=String((j&&j.error&&(j.error.message||j.error))||("HTTP "+r.status));
@@ -948,6 +949,16 @@ async function ors(path,body){
     throw new Error(m);
   }
   return j;
+}
+/* A failed fetch hides the reason: OpenRouteService's refusals (key not accepted, free limit used up) come back
+   without the header browsers need, so they look exactly like "no connection". A no-cors probe tells them apart:
+   it gets through when the server answered at all, and fails only when it truly can't be reached. */
+const onClaudePage=()=>!!(window.claude&&window.claude.use)||/claude\.ai|claudeusercontent/.test(location.host);
+async function orsWhyFailed(){
+  if(onClaudePage())return "blocked";
+  if(navigator.onLine===false)return "offline";
+  try{await fetch("https://api.openrouteservice.org/",{mode:"no-cors",cache:"no-store"});logEvent("route-error","refused (server reached, request turned down)");return "refused"}
+  catch(e){logEvent("route-error","server not reachable");return "unreachable"}
 }
 const uniqPts=a=>{const m=new Map();a.forEach(p=>{if(hasLoc(p))m.set(pk(p),{lat:+p.lat,lng:+p.lng})});return [...m.values()]};
 async function orsMatrix(origins,dests){
@@ -976,7 +987,10 @@ function routeErrText(e){
   const m=e&&e.message;
   if(m==="badkey")return "OpenRouteService didn't accept the key. Check it in Settings → Road drive times.";
   if(m==="limit")return "OpenRouteService's daily limit was reached — using estimated times until tomorrow.";
-  if(m==="offline")return "Couldn't reach OpenRouteService — using estimated times. (On the shared Claude page this is blocked; use the website version.)";
+  if(m==="refused")return "OpenRouteService turned down the request. Usually the key saved in this browser is wrong or no longer valid, or today's free limit is used up. Go to Settings → Road drive times and tap Test; if it still fails, paste the key again from account.heigit.org. Using estimated times for now.";
+  if(m==="blocked")return "Road times can't be looked up on the shared Claude page — open the website version for real road times. Using estimated times for now.";
+  if(m==="offline")return "This device is offline — using estimated times.";
+  if(m==="unreachable")return "Couldn't reach OpenRouteService (it may be down, or blocked on this network). Using estimated times; try Rebuild again in a few minutes.";
   return "Road times unavailable ("+m+") — using estimated times.";
 }
 /* Before building crews: everyone → every job, and every lead → everyone (for pickups). */
@@ -1681,7 +1695,7 @@ function rResults(){
   if(sk.length)h+=`<div class="bad"><b>⚠ ${sk.length} job${sk.length>1?"s are":" is"} NOT on this schedule:</b> ${sk.map(x=>`${esc(x.j.name)} (${esc(x.why)})`).join("; ")}. ${sk.some(x=>!hasLoc(x.j))?`Fix the location in step 1, then tap Rebuild.`:`Tap Rebuild to give ${sk.length>1?"them":"it"} a crew.`}</div>`;
   if(!prob&&!sk.length)h+=`<div class="good">Every truck has a lead and a full crew, with no conflicts.</div>`;
   h+=tempBanner(free.length);
-  if(routeLastErr)h+=`<div class="warn">${esc(routeLastErr)}</div>`;
+  if(routeLastErr)h+=`<div class="warn">${esc(routeLastErr)}${onClaudePage()?"":` <a href="#" data-act="goRoute">Open Road drive times</a>`}</div>`;
   else if(warmBusy)h+=`<div class="small muted" style="margin-top:6px">Getting road drive times…</div>`;
   if(anyEst)h+=`<div class="small muted" style="margin-top:6px">≈ = estimated (straight line at ${esc(S().avgMph)} mph). ${routeReady()?"Road times are on the way or unavailable for that spot.":`Add a free OpenRouteService key in <a href="#" data-act="goRoute">Settings → Road drive times</a> for real road times.`}</div>`;
   h+=rMap(jobs);

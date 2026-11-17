@@ -349,6 +349,25 @@ END:VCALENDAR`;
   ok(r.shared===0&&r.clicked===1,'on a computer the backup still downloads',r);
   ok(p.errs.length+pS.errs.length===0,'no script errors (16-b)',[p.errs,pS.errs]);await pS.context().close();
 
+  // ---------- 13b. road time errors say the real reason (Nov 17) ----------
+  // ORS refusals (bad key, limit) arrive without CORS headers, so the browser's fetch fails (simulated by aborting the POST)
+  // while the server is reachable (the no-cors probe gets an answer). The app must not call that "can't reach".
+  const pR=await open();
+  await pR.route(/openrouteservice\.org/,r=>r.request().method()==='GET'?r.fulfill({status:403,body:'{"error":"Access to this API has been disallowed"}'}):r.abort('failed'));
+  r=await pR.evaluate(async()=>{routeSetCfg({key:"bogus"});try{await ors("/v2/matrix/driving-car",{locations:[[0,0],[1,1]]});return "no error"}catch(e){return {code:e.message,text:routeErrText(e)}}});
+  ok(r.code==='refused'&&/key/.test(r.text)&&/Settings → Road drive times/.test(r.text)&&!/Claude page/.test(r.text),'a refused road-time request says to check the key, not "use the website"',r);
+  await pR.unroute(/openrouteservice\.org/);
+  r=await pR.evaluate(async()=>{try{await ors("/v2/matrix/driving-car",{locations:[[0,0],[1,1]]});return "no error"}catch(e){return {code:e.message,text:routeErrText(e)}}});
+  ok(r.code==='unreachable'&&!/Claude page/.test(r.text),'a truly unreachable server says so',r);
+  await pR.route(/openrouteservice\.org/,r=>r.fulfill({status:200,headers:{'access-control-allow-origin':'*','access-control-allow-headers':'*'},contentType:'application/json',body:'{"durations":[[600]],"distances":[[9]]}'}));
+  r=await pR.evaluate(async()=>{try{const j=await ors("/v2/matrix/driving-car",{locations:[[0,0],[1,1]]});return j.durations[0][0]}catch(e){return e.message}});
+  ok(r===600,'a working key still gets road times',r);
+  r=await pR.evaluate(()=>{window.claude={use:async()=>null};return orsWhyFailed()});
+  ok(r==='blocked','on the shared Claude page the reason is "blocked"',r);
+  r=await pR.evaluate(()=>{delete window.claude;loadSample();solve();routeLastErr=routeErrText(new Error("refused"));render();return !!document.querySelector('#step3 .warn [data-act=goRoute]')});
+  ok(r,'the road-time warning on Today links to Settings → Road drive times',r);
+  ok(pR.errs.length===0,'no script errors (17-a)',pR.errs);await pR.context().close();
+
   // ---------- 14. version and What's new are in step ----------
   r=await p.evaluate(()=>({v:APP_VERSION,top:CHANGELOG[0].v,shown:document.querySelector('#appVer').textContent}));
   ok(r.v===r.top&&r.shown==="v"+r.v,'APP_VERSION matches the newest What\'s new entry',r);
